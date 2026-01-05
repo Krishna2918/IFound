@@ -1,0 +1,89 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:14-alpine
+    container_name: ifound-postgres
+    environment:
+      POSTGRES_USER: ifound
+      POSTGRES_PASSWORD: ifound_password
+      POSTGRES_DB: ifound
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ifound"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: ifound-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ifound-backend
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      DATABASE_URL: postgresql://ifound:ifound_password@postgres:5432/ifound
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: your-secret-key-change-in-production
+      JWT_REFRESH_SECRET: your-refresh-secret-change-in-production
+      CORS_ORIGIN: http://localhost:3001
+      PLATFORM_COMMISSION_PERCENTAGE: 10
+      MIN_BOUNTY_AMOUNT: 10
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+      - uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: npm run dev
+
+  # Admin Web Panel (Optional)
+  admin:
+    build:
+      context: ./admin
+      dockerfile: Dockerfile
+    container_name: ifound-admin
+    environment:
+      REACT_APP_API_URL: http://localhost:3000/api/v1
+    ports:
+      - "3001:3000"
+    volumes:
+      - ./admin:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+    command: npm start
+
+volumes:
+  postgres_data:
+  redis_data:
+  uploads:
+
+networks:
+  default:
+    name: ifound-network

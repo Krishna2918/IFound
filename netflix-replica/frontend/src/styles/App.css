@@ -1,0 +1,411 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #141414;
+  color: #fff;
+  overflow-x: hidden;
+}
+
+.app {
+  min-height: 100vh;
+}
+
+/* Navbar Styles */
+.navbar {
+  position: fixed;
+  top: 0;
+  width: 100%;
+  padding: 20px 50px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  z-index: 100;
+  transition: background-color 0.3s ease;
+}
+
+.navbar.scrolled {
+  background-color: #141414;
+}
+
+.navbar-logo {
+  color: #e50914;
+  font-size: 32px;
+  font-weight: bold;
+  text-decoration: none;
+  letter-spacing: 2px;
+}
+
+.navbar-links {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+}
+
+.navbar-link {
+  color: #fff;
+  text-decoration: none;
+  font-size: 14px;
+  transition: color 0.3s;
+}
+
+.navbar-link:hover {
+  color: #e5e5e5;
+}
+
+.navbar-profile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.navbar-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.navbar-logout {
+  background-color: #e50914;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.navbar-logout:hover {
+  background-color: #f40612;
+}
+
+/* Hero Banner Styles */
+.hero-banner {
+  position: relative;
+  height: 80vh;
+  background-size: cover;
+  background-position: center;
+  display: flex;
+  align-items: center;
+  padding: 0 50px;
+  margin-bottom: 20px;
+}
+
+.hero-banner::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 200px;
+  background: linear-gradient(to top, #141414, transparent);
+}
+
+.hero-content {
+  position: relative;
+  z-index: 2;
+  max-width: 500px;
+}
+
+.hero-title {
+  font-size: 48px;
+  font-weight: bold;
+  margin-bottom: 20px;
+}
+
+.hero-description {
+  font-size: 18px;
+  line-height: 1.5;
+  margin-bottom: 30px;
+}
+
+.hero-buttons {
+  display: flex;
+  gap: 15px;
+}
+
+.hero-button {
+  padding: 12px 30px;
+  font-size: 16px;
+  font-weight: bold;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.3s;
+}
+
+.hero-button-play {
+  background-color: #fff;
+  color: #000;
+}
+
+.hero-button-play:hover {
+  background-color: rgba(255, 255, 255, 0.8);
+}
+
+.hero-button-info {
+  background-color: rgba(109, 109, 110, 0.7);
+  color: #fff;
+}
+
+.hero-button-info:hover {
+  background-color: rgba(109, 109, 110, 0.5);
+}
+
+/* Row Styles */
+.row {
+  padding: 0 50px;
+  margin-bottom: 40px;
+}
+
+.row-title {
+  font-size: 24px;
+  font-weight: bold;
+  margin-bottom: 15px;
+}
+
+.row-posters {
+  display: flex;
+  overflow-x: scroll;
+  overflow-y: hidden;
+  gap: 10px;
+  padding: 20px 0;
+  scrollbar-width: none;
+}
+
+.row-posters::-webkit-scrollbar {
+  display: none;
+}
+
+.row-poster {
+  width: 300px;
+  height: 170px;
+  object-fit: cover;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: transform 0.3s ease;
+  flex-shrink: 0;
+}
+
+.row-poster:hover {
+  transform: scale(1.08);
+}
+
+/* Auth Pages */
+.auth-container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)),
+    url('https://assets.nflxext.com/ffe/siteui/vlv3/web/5c0ea6a6-1d77-4cd3-94f5-4d3b108fb53f/login-bg.jpg');
+  background-size: cover;
+  background-position: center;
+}
+
+.auth-box {
+  background-color: rgba(0, 0, 0, 0.75);
+  padding: 60px 68px 40px;
+  border-radius: 4px;
+  width: 100%;
+  max-width: 450px;
+}
+
+.auth-title {
+  font-size: 32px;
+  font-weight: bold;
+  margin-bottom: 28px;
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.auth-input {
+  padding: 16px 20px;
+  font-size: 16px;
+  background-color: #333;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  outline: none;
+}
+
+.auth-button {
+  padding: 16px;
+  font-size: 16px;
+  font-weight: bold;
+  background-color: #e50914;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-top: 24px;
+}
+
+.auth-button:hover {
+  background-color: #f40612;
+}
+
+.auth-button:disabled {
+  background-color: #733;
+  cursor: not-allowed;
+}
+
+.auth-text {
+  color: #737373;
+  margin-top: 16px;
+}
+
+.auth-link {
+  color: #fff;
+  text-decoration: none;
+}
+
+.auth-link:hover {
+  text-decoration: underline;
+}
+
+.error-message {
+  color: #e87c03;
+  font-size: 14px;
+  margin-bottom: 16px;
+}
+
+/* Video Player */
+.video-player-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #000;
+  z-index: 1000;
+}
+
+.video-player-close {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  background-color: rgba(0, 0, 0, 0.7);
+  border: none;
+  color: #fff;
+  font-size: 24px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  cursor: pointer;
+  z-index: 1001;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.video-player-close:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.video-player {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* Search Page */
+.search-container {
+  padding: 100px 50px 50px;
+  min-height: 100vh;
+}
+
+.search-input {
+  width: 100%;
+  max-width: 600px;
+  padding: 16px 20px;
+  font-size: 18px;
+  background-color: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  margin-bottom: 30px;
+}
+
+.search-results {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 20px;
+}
+
+.loading {
+  text-align: center;
+  padding: 50px;
+  font-size: 24px;
+}
+
+/* Profile Selection */
+.profile-selection {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 50px;
+}
+
+.profile-selection-title {
+  font-size: 48px;
+  margin-bottom: 50px;
+}
+
+.profile-list {
+  display: flex;
+  gap: 40px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.profile-item {
+  cursor: pointer;
+  transition: transform 0.3s;
+  text-align: center;
+}
+
+.profile-item:hover {
+  transform: scale(1.1);
+}
+
+.profile-item-avatar {
+  width: 150px;
+  height: 150px;
+  border-radius: 8px;
+  margin-bottom: 10px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 60px;
+  font-weight: bold;
+}
+
+.profile-item-name {
+  font-size: 18px;
+  color: #808080;
+}
+
+.profile-item:hover .profile-item-name {
+  color: #fff;
+}
