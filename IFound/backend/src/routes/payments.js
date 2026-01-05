@@ -8,8 +8,23 @@ const {
   getUserBalance,
   getEarningsSummary,
   requestWithdrawal,
+  handleStripeWebhook,
 } = require('../controllers/paymentController');
 const { authenticateToken } = require('../middleware/auth');
+
+/**
+ * Stripe Webhook Handler
+ * This is exported separately and mounted in server.js before body parsing
+ * because Stripe webhooks require the raw body for signature verification
+ */
+const webhookHandler = async (req, res) => {
+  try {
+    await handleStripeWebhook(req, res);
+  } catch (error) {
+    console.error('Webhook error:', error);
+    res.status(400).json({ error: error.message });
+  }
+};
 
 // All payment routes require authentication
 router.use(authenticateToken);
@@ -25,4 +40,6 @@ router.get('/balance', getUserBalance);
 router.get('/earnings', getEarningsSummary);
 router.post('/withdraw', requestWithdrawal);
 
+// Export both router and webhook handler
 module.exports = router;
+module.exports.webhookHandler = webhookHandler;

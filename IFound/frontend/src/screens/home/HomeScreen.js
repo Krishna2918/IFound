@@ -1,88 +1,220 @@
-import React, { useState } from 'react';
-import { View, StyleSheet, FlatList, RefreshControl, TouchableOpacity, Text } from 'react-native';
-import { Searchbar, Card, Title, Paragraph, Surface } from 'react-native-paper';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, StyleSheet, FlatList, RefreshControl, TouchableOpacity, Text, Image } from 'react-native';
+import { Searchbar, Card, Title, Paragraph, Surface, ActivityIndicator } from 'react-native-paper';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { useFocusEffect } from '@react-navigation/native';
 import { colors } from '../../config/theme';
+import { caseAPI } from '../../services/api';
 
 const HomeScreen = ({ navigation }) => {
+  const [cases, setCases] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilter, setSelectedFilter] = useState('all');
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 20,
+    total: 0,
+    hasMore: false,
+  });
+  const [loadingMore, setLoadingMore] = useState(false);
 
   const filters = [
     { key: 'all', label: 'All', icon: 'view-grid' },
-    { key: 'finding', label: 'Lost Items', icon: 'magnify', color: '#2563EB' },
-    { key: 'found', label: 'Found Items', icon: 'hand-heart', color: '#10B981' },
+    { key: 'lost_item', label: 'Lost Items', icon: 'magnify', color: '#2563EB' },
+    { key: 'found_item', label: 'Found Items', icon: 'hand-heart', color: '#10B981' },
+    { key: 'lost_pet', label: 'Lost Pets', icon: 'dog', color: '#F59E0B' },
   ];
 
-  // Mock data with both types
-  const mockCases = [
-    { id: '1', title: 'Lost iPhone 13 Pro', category: 'Electronics', reward: 500, location: 'Downtown Mall', type: 'finding', postedBy: 'John D.' },
-    { id: '2', title: 'Found Orange Cat', category: 'Pets', reward: 0, location: 'Central Park', type: 'found', postedBy: 'Sarah M.' },
-    { id: '3', title: 'Lost Wallet - Brown Leather', category: 'Personal Items', reward: 100, location: 'Bus Station', type: 'finding', postedBy: 'Mike R.' },
-    { id: '4', title: 'Found Set of Keys', category: 'Keys', reward: 0, location: 'Coffee Shop on Main St', type: 'found', postedBy: 'Lisa K.' },
-    { id: '5', title: 'Missing Dog - Golden Retriever', category: 'Pets', reward: 1000, location: 'Riverside Area', type: 'finding', postedBy: 'Tom W.' },
-  ];
+  // Refresh cases when screen gains focus
+  useFocusEffect(
+    useCallback(() => {
+      fetchCases(true);
+    }, [selectedFilter, searchQuery])
+  );
 
-  const filteredCases = selectedFilter === 'all'
-    ? mockCases
-    : mockCases.filter(c => c.type === selectedFilter);
+  const fetchCases = async (reset = false) => {
+    try {
+      if (reset) {
+        setLoading(true);
+      }
 
-  const onRefresh = () => {
+      const params = {
+        page: reset ? 1 : pagination.page,
+        limit: pagination.limit,
+        status: 'active', // Only show active cases
+      };
+
+      // Add category filter
+      if (selectedFilter !== 'all') {
+        params.category = selectedFilter;
+      }
+
+      // Add search query
+      if (searchQuery.trim()) {
+        params.search = searchQuery.trim();
+      }
+
+      const response = await caseAPI.getCases(params);
+
+      if (response.success) {
+        const newCases = response.data || [];
+
+        if (reset) {
+          setCases(newCases);
+        } else {
+          setCases(prev => [...prev, ...newCases]);
+        }
+
+        setPagination(prev => ({
+          ...prev,
+          page: reset ? 2 : prev.page + 1,
+          total: response.pagination?.total || newCases.length,
+          hasMore: newCases.length === pagination.limit,
+        }));
+      }
+    } catch (error) {
+      console.error('Error fetching cases:', error);
+      // Use fallback mock data on error
+      if (cases.length === 0) {
+        setCases(mockCases);
+      }
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+      setLoadingMore(false);
+    }
+  };
+
+  const onRefresh = useCallback(() => {
     setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 1500);
+    fetchCases(true);
+  }, [selectedFilter, searchQuery]);
+
+  const onLoadMore = () => {
+    if (!loadingMore && pagination.hasMore) {
+      setLoadingMore(true);
+      fetchCases(false);
+    }
+  };
+
+  const handleFilterChange = (filterKey) => {
+    setSelectedFilter(filterKey);
+    setPagination(prev => ({ ...prev, page: 1 }));
+    setCases([]);
+    setLoading(true);
+  };
+
+  const handleSearch = useCallback(() => {
+    setPagination(prev => ({ ...prev, page: 1 }));
+    setCases([]);
+    fetchCases(true);
+  }, [searchQuery, selectedFilter]);
+
+  const getCaseType = (category) => {
+    if (category === 'found_item') return 'found';
+    return 'finding';
+  };
+
+  const getReward = (caseItem) => {
+    return caseItem.bounty_amount || caseItem.reward || 0;
+  };
+
+  const getLocation = (caseItem) => {
+    if (caseItem.location_description) return caseItem.location_description;
+    if (caseItem.city && caseItem.state) return `${caseItem.city}, ${caseItem.state}`;
+    if (caseItem.last_seen_location) return caseItem.last_seen_location;
+    return 'Location not specified';
+  };
+
+  const getPosterName = (caseItem) => {
+    if (caseItem.poster) {
+      return `${caseItem.poster.first_name || ''} ${caseItem.poster.last_name?.[0] || ''}.`.trim();
+    }
+    return 'Anonymous';
+  };
+
+  const getCaseImage = (caseItem) => {
+    if (caseItem.photos && caseItem.photos.length > 0) {
+      return caseItem.photos[0].url || caseItem.photos[0].thumbnail_url;
+    }
+    return null;
   };
 
   const renderCase = ({ item }) => {
-    const isFound = item.type === 'found';
+    const isFound = getCaseType(item.category) === 'found';
+    const reward = getReward(item);
+    const imageUrl = getCaseImage(item);
 
     return (
       <Card
         style={styles.card}
         onPress={() => navigation.navigate('CaseDetail', { caseId: item.id })}
       >
-        <Card.Content>
-          <View style={styles.cardHeader}>
-            <View style={[styles.typeBadge, isFound ? styles.foundBadge : styles.findingBadge]}>
-              <Icon
-                name={isFound ? 'hand-heart' : 'magnify'}
-                size={12}
-                color={isFound ? '#10B981' : '#2563EB'}
-              />
-              <Text style={[styles.typeBadgeText, isFound ? styles.foundBadgeText : styles.findingBadgeText]}>
-                {isFound ? 'FOUND' : 'LOOKING FOR'}
-              </Text>
-            </View>
-            {item.reward > 0 && (
-              <View style={styles.rewardBadge}>
-                <Icon name="currency-usd" size={12} color="#F59E0B" />
-                <Text style={styles.rewardBadgeText}>${item.reward}</Text>
+        <View style={styles.cardRow}>
+          {/* Image thumbnail */}
+          {imageUrl && (
+            <Image
+              source={{ uri: imageUrl }}
+              style={styles.cardImage}
+              resizeMode="cover"
+            />
+          )}
+
+          <Card.Content style={[styles.cardContent, !imageUrl && styles.cardContentFull]}>
+            <View style={styles.cardHeader}>
+              <View style={[styles.typeBadge, isFound ? styles.foundBadge : styles.findingBadge]}>
+                <Icon
+                  name={isFound ? 'hand-heart' : 'magnify'}
+                  size={12}
+                  color={isFound ? '#10B981' : '#2563EB'}
+                />
+                <Text style={[styles.typeBadgeText, isFound ? styles.foundBadgeText : styles.findingBadgeText]}>
+                  {isFound ? 'FOUND' : 'LOOKING FOR'}
+                </Text>
               </View>
-            )}
-          </View>
-
-          <Title style={styles.cardTitle}>{item.title}</Title>
-
-          <View style={styles.cardDetails}>
-            <View style={styles.detailRow}>
-              <Icon name="tag" size={14} color="#6B7280" />
-              <Text style={styles.detailText}>{item.category}</Text>
+              {reward > 0 && (
+                <View style={styles.rewardBadge}>
+                  <Icon name="currency-usd" size={12} color="#F59E0B" />
+                  <Text style={styles.rewardBadgeText}>${reward}</Text>
+                </View>
+              )}
             </View>
-            <View style={styles.detailRow}>
-              <Icon name="map-marker" size={14} color="#6B7280" />
-              <Text style={styles.detailText}>{item.location}</Text>
-            </View>
-          </View>
 
-          <View style={styles.cardFooter}>
-            <Text style={styles.postedBy}>Posted by {item.postedBy}</Text>
-            {isFound ? (
-              <Text style={styles.actionHint}>Tap to claim</Text>
-            ) : (
-              <Text style={styles.actionHint}>Tap to submit tip</Text>
-            )}
-          </View>
-        </Card.Content>
+            <Title style={styles.cardTitle} numberOfLines={2}>{item.title}</Title>
+
+            <View style={styles.cardDetails}>
+              <View style={styles.detailRow}>
+                <Icon name="tag" size={14} color="#6B7280" />
+                <Text style={styles.detailText}>{item.category?.replace(/_/g, ' ') || 'Item'}</Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Icon name="map-marker" size={14} color="#6B7280" />
+                <Text style={styles.detailText} numberOfLines={1}>{getLocation(item)}</Text>
+              </View>
+            </View>
+
+            <View style={styles.cardFooter}>
+              <Text style={styles.postedBy}>Posted by {getPosterName(item)}</Text>
+              {isFound ? (
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={() => navigation.navigate('ClaimItem', { caseData: item })}
+                >
+                  <Text style={styles.actionButtonText}>Claim</Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={() => navigation.navigate('SubmitTip', { caseData: item })}
+                >
+                  <Text style={styles.actionButtonText}>Submit Tip</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </Card.Content>
+        </View>
       </Card>
     );
   };
@@ -93,7 +225,7 @@ const HomeScreen = ({ navigation }) => {
       <Text style={styles.postSectionTitle}>Post a Listing</Text>
       <View style={styles.actionContainer}>
         <TouchableOpacity
-          style={[styles.actionButton, styles.foundButton]}
+          style={[styles.postButton, styles.foundButton]}
           onPress={() => navigation.navigate('ReportFound')}
         >
           <View style={[styles.actionIconContainer, styles.foundIconBg]}>
@@ -104,7 +236,7 @@ const HomeScreen = ({ navigation }) => {
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.actionButton, styles.findingButton]}
+          style={[styles.postButton, styles.findingButton]}
           onPress={() => navigation.navigate('CreateCase')}
         >
           <View style={[styles.actionIconContainer, styles.findingIconBg]}>
@@ -121,6 +253,7 @@ const HomeScreen = ({ navigation }) => {
         onChangeText={setSearchQuery}
         value={searchQuery}
         style={styles.searchbar}
+        onSubmitEditing={handleSearch}
       />
 
       {/* Browse Section */}
@@ -136,7 +269,7 @@ const HomeScreen = ({ navigation }) => {
               selectedFilter === filter.key && styles.filterTabActive,
               selectedFilter === filter.key && filter.color && { borderColor: filter.color },
             ]}
-            onPress={() => setSelectedFilter(filter.key)}
+            onPress={() => handleFilterChange(filter.key)}
           >
             <Icon
               name={filter.icon}
@@ -157,7 +290,7 @@ const HomeScreen = ({ navigation }) => {
       </View>
 
       {/* Info cards based on filter */}
-      {selectedFilter === 'finding' && (
+      {selectedFilter === 'lost_item' && (
         <Surface style={styles.infoCard}>
           <Icon name="information-outline" size={18} color="#2563EB" />
           <Text style={styles.infoCardText}>
@@ -166,7 +299,7 @@ const HomeScreen = ({ navigation }) => {
         </Surface>
       )}
 
-      {selectedFilter === 'found' && (
+      {selectedFilter === 'found_item' && (
         <Surface style={styles.infoCardGreen}>
           <Icon name="information-outline" size={18} color="#10B981" />
           <Text style={styles.infoCardTextGreen}>
@@ -176,26 +309,50 @@ const HomeScreen = ({ navigation }) => {
       )}
 
       <Text style={styles.resultsCount}>
-        {filteredCases.length} {filteredCases.length === 1 ? 'listing' : 'listings'}
+        {pagination.total > 0 ? pagination.total : cases.length} {cases.length === 1 ? 'listing' : 'listings'}
       </Text>
     </>
   );
 
+  const renderFooter = () => {
+    if (!loadingMore) return null;
+    return (
+      <View style={styles.loadingMore}>
+        <ActivityIndicator size="small" color={colors.primary} />
+      </View>
+    );
+  };
+
+  if (loading && cases.length === 0) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={styles.loadingText}>Loading listings...</Text>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <FlatList
-        data={filteredCases}
+        data={cases}
         renderItem={renderCase}
         keyExtractor={(item) => item.id}
         ListHeaderComponent={renderHeader}
+        ListFooterComponent={renderFooter}
         contentContainerStyle={styles.list}
+        onEndReached={onLoadMore}
+        onEndReachedThreshold={0.5}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} />
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Icon name="folder-open-outline" size={48} color="#D1D5DB" />
             <Text style={styles.emptyText}>No listings found</Text>
+            <Text style={styles.emptySubtext}>
+              Try adjusting your filters or check back later
+            </Text>
           </View>
         }
       />
@@ -203,10 +360,30 @@ const HomeScreen = ({ navigation }) => {
   );
 };
 
+// Fallback mock data for development/offline
+const mockCases = [
+  { id: '1', title: 'Lost iPhone 13 Pro', category: 'lost_item', bounty_amount: 500, location_description: 'Downtown Mall', poster: { first_name: 'John', last_name: 'Doe' } },
+  { id: '2', title: 'Found Orange Cat', category: 'found_item', bounty_amount: 0, location_description: 'Central Park', poster: { first_name: 'Sarah', last_name: 'Miller' } },
+  { id: '3', title: 'Lost Wallet - Brown Leather', category: 'lost_item', bounty_amount: 100, location_description: 'Bus Station', poster: { first_name: 'Mike', last_name: 'Ross' } },
+  { id: '4', title: 'Found Set of Keys', category: 'found_item', bounty_amount: 0, location_description: 'Coffee Shop on Main St', poster: { first_name: 'Lisa', last_name: 'Kim' } },
+  { id: '5', title: 'Missing Dog - Golden Retriever', category: 'lost_pet', bounty_amount: 1000, location_description: 'Riverside Area', poster: { first_name: 'Tom', last_name: 'Wilson' } },
+];
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: colors.background,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#6B7280',
   },
   postSectionTitle: {
     fontSize: 18,
@@ -221,7 +398,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     gap: 12,
   },
-  actionButton: {
+  postButton: {
     flex: 1,
     borderRadius: 16,
     padding: 14,
@@ -285,6 +462,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     gap: 8,
     marginBottom: 12,
+    flexWrap: 'wrap',
   },
   filterTab: {
     flexDirection: 'row',
@@ -296,6 +474,7 @@ const styles = StyleSheet.create({
     gap: 6,
     borderWidth: 2,
     borderColor: 'transparent',
+    marginBottom: 4,
   },
   filterTabActive: {
     backgroundColor: '#FFFFFF',
@@ -356,6 +535,23 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     elevation: 2,
     borderRadius: 12,
+    overflow: 'hidden',
+  },
+  cardRow: {
+    flexDirection: 'row',
+  },
+  cardImage: {
+    width: 100,
+    height: '100%',
+    minHeight: 120,
+    backgroundColor: '#E5E7EB',
+  },
+  cardContent: {
+    flex: 1,
+    padding: 12,
+  },
+  cardContentFull: {
+    paddingLeft: 16,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -402,8 +598,9 @@ const styles = StyleSheet.create({
     color: '#B45309',
   },
   cardTitle: {
-    fontSize: 16,
+    fontSize: 15,
     marginBottom: 8,
+    lineHeight: 20,
   },
   cardDetails: {
     gap: 4,
@@ -415,8 +612,9 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   detailText: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#6B7280',
+    flex: 1,
   },
   cardFooter: {
     flexDirection: 'row',
@@ -427,22 +625,38 @@ const styles = StyleSheet.create({
     borderTopColor: '#F3F4F6',
   },
   postedBy: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#9CA3AF',
+    flex: 1,
   },
-  actionHint: {
+  actionButton: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  actionButtonText: {
     fontSize: 12,
-    color: colors.primary,
-    fontWeight: '500',
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  loadingMore: {
+    paddingVertical: 16,
   },
   emptyContainer: {
     alignItems: 'center',
     paddingVertical: 40,
   },
   emptyText: {
-    fontSize: 14,
-    color: '#9CA3AF',
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#6B7280',
     marginTop: 12,
+  },
+  emptySubtext: {
+    fontSize: 13,
+    color: '#9CA3AF',
+    marginTop: 4,
   },
 });
 

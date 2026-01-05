@@ -1,8 +1,14 @@
 const paymentService = require('../services/paymentService');
-const { Transaction, Case, User } = require('../models');
+const { Transaction, Case, User, Claim } = require('../models');
 const { asyncHandler } = require('../middleware/errorHandler');
 const { Op } = require('sequelize');
 const logger = require('../config/logger');
+const businessRules = require('../config/businessRules');
+
+// Initialize Stripe
+const stripe = process.env.STRIPE_SECRET_KEY
+  ? require('stripe')(process.env.STRIPE_SECRET_KEY)
+  : null;
 
 // @desc    Create bounty payment intent
 // @route   POST /api/v1/payments/bounty
@@ -336,6 +342,280 @@ const requestWithdrawal = asyncHandler(async (req, res) => {
   });
 });
 
+// @desc    Handle Stripe webhook events
+// @route   POST /webhooks/stripe
+// @access  Public (verified by Stripe signature)
+const handleStripeWebhook = async (req, res) => {
+  if (!stripe) {
+    logger.warn('Stripe webhook received but Stripe is not configured');
+    return res.status(200).json({ received: true, message: 'Stripe not configured' });
+  }
+
+  const sig = req.headers['stripe-signature'];
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+  let event;
+
+  try {
+    // Verify webhook signature
+    event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
+  } catch (err) {
+    logger.error('Webhook signature verification failed', { error: err.message });
+    return res.status(400).json({ error: `Webhook Error: ${err.message}` });
+  }
+
+  logger.info('Stripe webhook received', { type: event.type, id: event.id });
+
+  // Handle the event
+  switch (event.type) {
+    case 'payment_intent.succeeded':
+      await handlePaymentIntentSucceeded(event.data.object);
+      break;
+
+    case 'payment_intent.payment_failed':
+      await handlePaymentIntentFailed(event.data.object);
+      break;
+
+    case 'charge.refunded':
+      await handleChargeRefunded(event.data.object);
+      break;
+
+    case 'transfer.created':
+      await handleTransferCreated(event.data.object);
+      break;
+
+    case 'payout.paid':
+      await handlePayoutPaid(event.data.object);
+      break;
+
+    case 'payout.failed':
+      await handlePayoutFailed(event.data.object);
+      break;
+
+    default:
+      logger.info(`Unhandled Stripe event type: ${event.type}`);
+  }
+
+  res.status(200).json({ received: true });
+};
+
+/**
+ * Handle successful payment intent - move funds to escrow
+ */
+async function handlePaymentIntentSucceeded(paymentIntent) {
+  const transaction = await Transaction.findOne({
+    where: { stripe_payment_intent_id: paymentIntent.id },
+    include: [{ model: Case, as: 'case' }],
+  });
+
+  if (!transaction) {
+    logger.warn('Transaction not found for payment intent', { id: paymentIntent.id });
+    return;
+  }
+
+  // Update transaction to escrow status
+  await transaction.update({
+    status: 'escrow',
+    stripe_charge_id: paymentIntent.latest_charge,
+    metadata: {
+      ...transaction.metadata,
+      escrow_started_at: new Date().toISOString(),
+      escrow_release_date: new Date(
+        Date.now() + businessRules.escrow.holdDuration * 24 * 60 * 60 * 1000
+      ).toISOString(),
+    },
+  });
+
+  // Update case status
+  if (transaction.case) {
+    await transaction.case.update({
+      bounty_status: 'held',
+    });
+  }
+
+  logger.info('Payment moved to escrow', {
+    transactionId: transaction.id,
+    amount: transaction.amount,
+    caseId: transaction.case_id,
+  });
+}
+
+/**
+ * Handle failed payment intent
+ */
+async function handlePaymentIntentFailed(paymentIntent) {
+  const transaction = await Transaction.findOne({
+    where: { stripe_payment_intent_id: paymentIntent.id },
+  });
+
+  if (!transaction) {
+    logger.warn('Transaction not found for failed payment', { id: paymentIntent.id });
+    return;
+  }
+
+  await transaction.update({
+    status: 'failed',
+    failure_reason: paymentIntent.last_payment_error?.message || 'Payment failed',
+    metadata: {
+      ...transaction.metadata,
+      failed_at: new Date().toISOString(),
+      error_code: paymentIntent.last_payment_error?.code,
+    },
+  });
+
+  logger.info('Payment intent failed', {
+    transactionId: transaction.id,
+    reason: paymentIntent.last_payment_error?.message,
+  });
+}
+
+/**
+ * Handle charge refunded
+ */
+async function handleChargeRefunded(charge) {
+  const transaction = await Transaction.findOne({
+    where: { stripe_charge_id: charge.id },
+  });
+
+  if (!transaction) {
+    logger.warn('Transaction not found for refund', { chargeId: charge.id });
+    return;
+  }
+
+  await transaction.update({
+    status: 'refunded',
+    refund_reason: charge.refunds?.data[0]?.reason || 'Refund processed',
+    refunded_at: new Date(),
+    metadata: {
+      ...transaction.metadata,
+      refund_id: charge.refunds?.data[0]?.id,
+      refunded_at: new Date().toISOString(),
+    },
+  });
+
+  // Update case if applicable
+  if (transaction.case_id) {
+    await Case.update(
+      { bounty_status: 'refunded', status: 'active' },
+      { where: { id: transaction.case_id } }
+    );
+  }
+
+  logger.info('Charge refunded', {
+    transactionId: transaction.id,
+    chargeId: charge.id,
+  });
+}
+
+/**
+ * Handle transfer created (bounty released to finder)
+ */
+async function handleTransferCreated(transfer) {
+  const transaction = await Transaction.findOne({
+    where: { stripe_transfer_id: transfer.id },
+  });
+
+  if (!transaction) {
+    // May be a transfer we don't track
+    logger.info('Transfer not linked to transaction', { transferId: transfer.id });
+    return;
+  }
+
+  await transaction.update({
+    status: 'completed',
+    completed_at: new Date(),
+    metadata: {
+      ...transaction.metadata,
+      transfer_completed_at: new Date().toISOString(),
+    },
+  });
+
+  // Update finder's total earnings
+  if (transaction.finder_id) {
+    await User.increment('total_earnings', {
+      by: parseFloat(transaction.net_amount),
+      where: { id: transaction.finder_id },
+    });
+  }
+
+  // Update case status
+  if (transaction.case_id) {
+    await Case.update(
+      { bounty_status: 'paid', status: 'resolved' },
+      { where: { id: transaction.case_id } }
+    );
+  }
+
+  logger.info('Transfer completed, bounty paid to finder', {
+    transactionId: transaction.id,
+    finderId: transaction.finder_id,
+    amount: transaction.net_amount,
+  });
+}
+
+/**
+ * Handle payout paid (withdrawal to bank)
+ */
+async function handlePayoutPaid(payout) {
+  const transaction = await Transaction.findOne({
+    where: {
+      stripe_payout_id: payout.id,
+      transaction_type: 'withdrawal',
+    },
+  });
+
+  if (!transaction) {
+    logger.info('Payout not linked to withdrawal', { payoutId: payout.id });
+    return;
+  }
+
+  await transaction.update({
+    status: 'completed',
+    completed_at: new Date(),
+    metadata: {
+      ...transaction.metadata,
+      payout_completed_at: new Date().toISOString(),
+    },
+  });
+
+  logger.info('Withdrawal payout completed', {
+    transactionId: transaction.id,
+    amount: transaction.amount,
+  });
+}
+
+/**
+ * Handle payout failed
+ */
+async function handlePayoutFailed(payout) {
+  const transaction = await Transaction.findOne({
+    where: {
+      stripe_payout_id: payout.id,
+      transaction_type: 'withdrawal',
+    },
+  });
+
+  if (!transaction) {
+    logger.info('Failed payout not linked to withdrawal', { payoutId: payout.id });
+    return;
+  }
+
+  await transaction.update({
+    status: 'failed',
+    failure_reason: payout.failure_message || 'Payout failed',
+    metadata: {
+      ...transaction.metadata,
+      payout_failed_at: new Date().toISOString(),
+      failure_code: payout.failure_code,
+    },
+  });
+
+  logger.info('Withdrawal payout failed', {
+    transactionId: transaction.id,
+    reason: payout.failure_message,
+  });
+}
+
 module.exports = {
   createBountyPayment,
   releaseBounty,
@@ -344,4 +624,5 @@ module.exports = {
   getUserBalance,
   getEarningsSummary,
   requestWithdrawal,
+  handleStripeWebhook,
 };

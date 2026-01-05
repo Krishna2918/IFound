@@ -112,4 +112,32 @@ export const adminAPI = {
   getAllTransactions: (params) => api.get('/admin/transactions', { params }),
 };
 
+// Claim endpoints
+export const claimAPI = {
+  createClaim: (formData) => api.post('/claims', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }),
+  getMyClaims: (params) => api.get('/claims/my-claims', { params }),
+  getClaimById: (id) => api.get(`/claims/${id}`),
+  cancelClaim: (id) => api.post(`/claims/${id}/cancel`),
+  answerVerificationQuestion: (id, data) => api.post(`/claims/${id}/answer`, data),
+  confirmHandover: (id) => api.post(`/claims/${id}/confirm-handover`),
+  openDispute: (id, data) => api.post(`/claims/${id}/dispute`, data),
+  // Finder actions
+  getClaimsForCase: (caseId, params) => api.get(`/claims/case/${caseId}`, { params }),
+  reviewClaim: (id, data) => api.put(`/claims/${id}/review`, data),
+  askVerificationQuestion: (id, data) => api.post(`/claims/${id}/question`, data),
+};
+
+// Message/Chat endpoints
+export const messageAPI = {
+  getMyChats: () => api.get('/messages/chats'),
+  getUnreadCount: () => api.get('/messages/unread-count'),
+  getMessages: (claimId, params) => api.get(`/messages/claim/${claimId}`, { params }),
+  sendMessage: (claimId, data) => api.post(`/messages/claim/${claimId}`, data),
+  uploadFile: (claimId, formData) => api.post(`/messages/claim/${claimId}/upload`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }),
+};
+
 export default api;

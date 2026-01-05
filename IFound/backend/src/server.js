@@ -15,17 +15,8 @@ const logger = require('./config/logger');
 const { validateEnv, getSafeEnvInfo } = require('./config/validateEnv');
 
 // Import routes
-const authRoutes = require('./routes/auth');
-const caseRoutes = require('./routes/cases');
-const submissionRoutes = require('./routes/submissions');
-const photoRoutes = require('./routes/photos');
-const paymentRoutes = require('./routes/payments');
-const adminRoutes = require('./routes/admin');
-const aiRoutes = require('./routes/ai');
-const visualDNARoutes = require('./routes/visualdna');
-const matchRoutes = require('./routes/matches');
-const claimRoutes = require('./routes/claimRoutes');
-const messageRoutes = require('./routes/messages');
+const v1Routes = require('./routes/v1');
+const businessRules = require('./config/businessRules');
 
 // Validate environment variables before starting
 validateEnv({ exitOnError: process.env.NODE_ENV === 'production' });
@@ -84,6 +75,12 @@ const authLimiter = rateLimit({
 app.use('/api/v1/auth/login', authLimiter);
 app.use('/api/v1/auth/register', authLimiter);
 
+// Stripe webhook endpoint (needs raw body, must be before body parsing)
+app.post('/webhooks/stripe',
+  express.raw({ type: 'application/json' }),
+  require('./routes/payments').webhookHandler
+);
+
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -117,19 +114,12 @@ app.get('/health', (req, res) => {
   });
 });
 
-// API routes
+// API routes - Version 1
 const API_VERSION = process.env.API_VERSION || 'v1';
-app.use(`/api/${API_VERSION}/auth`, authRoutes);
-app.use(`/api/${API_VERSION}/cases`, caseRoutes);
-app.use(`/api/${API_VERSION}/submissions`, submissionRoutes);
-app.use(`/api/${API_VERSION}/photos`, photoRoutes);
-app.use(`/api/${API_VERSION}/payments`, paymentRoutes);
-app.use(`/api/${API_VERSION}/admin`, adminRoutes);
-app.use(`/api/${API_VERSION}/ai`, aiRoutes);
-app.use(`/api/${API_VERSION}/matches`, matchRoutes);
-app.use(`/api/${API_VERSION}/claims`, claimRoutes);
-app.use(`/api/${API_VERSION}/messages`, messageRoutes);
-app.use(`/api/${API_VERSION}`, visualDNARoutes); // Visual DNA routes (smart search, compare, etc.)
+app.use(`/api/${API_VERSION}`, v1Routes);
+
+// Future: Add v2 routes when needed
+// app.use('/api/v2', v2Routes);
 
 // Root route
 app.get('/', (req, res) => {

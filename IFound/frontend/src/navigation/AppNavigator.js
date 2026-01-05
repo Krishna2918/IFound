@@ -22,6 +22,15 @@ import MySubmissionsScreen from '../screens/profile/MySubmissionsScreen';
 import MyCasesScreen from '../screens/profile/MyCasesScreen';
 import PaymentHistoryScreen from '../screens/payment/PaymentHistoryScreen';
 
+// Claim screens
+import ClaimItemScreen from '../screens/claims/ClaimItemScreen';
+import MyClaimsScreen from '../screens/claims/MyClaimsScreen';
+import ClaimDetailScreen from '../screens/claims/ClaimDetailScreen';
+
+// Chat screens
+import ChatScreen from '../screens/chat/ChatScreen';
+import ChatListScreen from '../screens/chat/ChatListScreen';
+
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
@@ -38,8 +47,8 @@ const MainTabNavigator = () => {
             iconName = focused ? 'magnify' : 'magnify';
           } else if (route.name === 'PostTab') {
             iconName = focused ? 'plus-circle' : 'plus-circle-outline';
-          } else if (route.name === 'MapTab') {
-            iconName = focused ? 'map' : 'map-outline';
+          } else if (route.name === 'MessagesTab') {
+            iconName = focused ? 'chat' : 'chat-outline';
           } else if (route.name === 'ProfileTab') {
             iconName = focused ? 'account' : 'account-outline';
           }
@@ -67,9 +76,9 @@ const MainTabNavigator = () => {
         options={{ tabBarLabel: 'Post' }}
       />
       <Tab.Screen
-        name="MapTab"
-        component={MapViewScreen}
-        options={{ tabBarLabel: 'Map' }}
+        name="MessagesTab"
+        component={ChatListScreen}
+        options={{ tabBarLabel: 'Messages' }}
       />
       <Tab.Screen
         name="ProfileTab"
@@ -107,6 +116,13 @@ const AppNavigator = () => {
           <Stack.Screen name="MyCases" component={MyCasesScreen} />
           <Stack.Screen name="MySubmissions" component={MySubmissionsScreen} />
           <Stack.Screen name="PaymentHistory" component={PaymentHistoryScreen} />
+          {/* Claim screens */}
+          <Stack.Screen name="ClaimItem" component={ClaimItemScreen} />
+          <Stack.Screen name="MyClaims" component={MyClaimsScreen} />
+          <Stack.Screen name="ClaimDetail" component={ClaimDetailScreen} />
+          {/* Chat screens */}
+          <Stack.Screen name="Chat" component={ChatScreen} />
+          <Stack.Screen name="ChatList" component={ChatListScreen} />
         </>
       )}
     </Stack.Navigator>
