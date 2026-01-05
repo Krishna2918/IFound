@@ -11,6 +11,8 @@ const { testConnection } = require('./config/database');
 const { syncDatabase } = require('./models');
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
 const { sanitizeInput, preventInjection } = require('./middleware/sanitize');
+const { auditSensitiveRoutes } = require('./middleware/auditMiddleware');
+const { tieredRateLimiter, authLimiter: tieredAuthLimiter, registrationLimiter } = require('./middleware/rateLimit');
 const logger = require('./config/logger');
 const { validateEnv, getSafeEnvInfo } = require('./config/validateEnv');
 
@@ -88,6 +90,9 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Input sanitization middleware (XSS protection)
 app.use(sanitizeInput);
 app.use(preventInjection);
+
+// Audit logging for sensitive routes
+app.use(auditSensitiveRoutes());
 
 // HTTP request logging with Winston
 app.use((req, res, next) => {

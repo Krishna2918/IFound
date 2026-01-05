@@ -11,6 +11,11 @@ const Message = require('./Message');
 const MatchFeedback = require('./MatchFeedback');
 const TrainingPair = require('./TrainingPair');
 const ModelConfig = require('./ModelConfig');
+const FraudAlert = require('./FraudAlert');
+const AuditLog = require('./AuditLog');
+const NotificationPreference = require('./NotificationPreference');
+const DeviceToken = require('./DeviceToken');
+const Notification = require('./Notification');
 
 // Define Associations
 
@@ -88,6 +93,30 @@ ModelConfig.belongsTo(ModelConfig, { foreignKey: 'parent_config_id', as: 'parent
 ModelConfig.hasMany(ModelConfig, { foreignKey: 'parent_config_id', as: 'childConfigs' });
 ModelConfig.belongsTo(User, { foreignKey: 'approved_by', as: 'approver' });
 
+// FraudAlert associations
+FraudAlert.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+FraudAlert.belongsTo(User, { foreignKey: 'reviewed_by', as: 'reviewer' });
+FraudAlert.belongsTo(Case, { foreignKey: 'case_id', as: 'case' });
+FraudAlert.belongsTo(Claim, { foreignKey: 'claim_id', as: 'claim' });
+FraudAlert.belongsTo(Transaction, { foreignKey: 'transaction_id', as: 'transaction' });
+User.hasMany(FraudAlert, { foreignKey: 'user_id', as: 'fraudAlerts' });
+
+// AuditLog associations
+AuditLog.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+User.hasMany(AuditLog, { foreignKey: 'user_id', as: 'auditLogs' });
+
+// NotificationPreference associations
+NotificationPreference.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+User.hasOne(NotificationPreference, { foreignKey: 'user_id', as: 'notificationPreferences' });
+
+// DeviceToken associations
+DeviceToken.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+User.hasMany(DeviceToken, { foreignKey: 'user_id', as: 'deviceTokens' });
+
+// Notification associations
+Notification.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+User.hasMany(Notification, { foreignKey: 'user_id', as: 'notifications' });
+
 // Add new enum value if it doesn't exist (for PostgreSQL)
 const updateEnumType = async () => {
   try {
@@ -141,5 +170,10 @@ module.exports = {
   MatchFeedback,
   TrainingPair,
   ModelConfig,
+  FraudAlert,
+  AuditLog,
+  NotificationPreference,
+  DeviceToken,
+  Notification,
   syncDatabase,
 };
