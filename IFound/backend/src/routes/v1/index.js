@@ -20,6 +20,7 @@ const matchRoutes = require('../matches');
 const claimRoutes = require('../claimRoutes');
 const messageRoutes = require('../messages');
 const notificationRoutes = require('../notifications');
+const verificationRoutes = require('../verification');
 
 const businessRules = require('../../config/businessRules');
 const logger = require('../../config/logger');
@@ -112,6 +113,7 @@ router.use('/matches', matchRoutes);
 router.use('/claims', claimRoutes);
 router.use('/messages', messageRoutes);
 router.use('/notifications', notificationRoutes);
+router.use('/verification', verificationRoutes);
 router.use('/', visualDNARoutes); // Visual DNA routes at root level
 
 // Version info endpoint
@@ -131,6 +133,7 @@ router.get('/', (req, res) => {
       claims: '/api/v1/claims',
       messages: '/api/v1/messages',
       notifications: '/api/v1/notifications',
+      verification: '/api/v1/verification',
       admin: '/api/v1/admin',
       ai: '/api/v1/ai',
     },
