@@ -23,6 +23,11 @@ const {
   getSecuritySummary,
   checkUserFraud,
 } = require('../controllers/fraudController');
+const {
+  getSystemHealth,
+  healthPing,
+  getDatabaseHealth,
+} = require('../controllers/healthController');
 const { authenticateToken, requireUserType } = require('../middleware/auth');
 const { auditMiddlewares } = require('../middleware/auditMiddleware');
 
@@ -66,5 +71,10 @@ router.get('/audit-logs', getAuditLogs);
 
 // Security Dashboard
 router.get('/security/summary', getSecuritySummary);
+
+// System Health Monitoring
+router.get('/health', getSystemHealth);
+router.get('/health/ping', healthPing);
+router.get('/health/database', getDatabaseHealth);
 
 module.exports = router;

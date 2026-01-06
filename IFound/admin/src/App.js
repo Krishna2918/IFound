@@ -9,6 +9,9 @@ import CasesPage from './pages/CasesPage';
 import SubmissionsPage from './pages/SubmissionsPage';
 import TransactionsPage from './pages/TransactionsPage';
 import MatchesPage from './pages/MatchesPage';
+import FraudAlertsPage from './pages/FraudAlertsPage';
+import VerificationRequestsPage from './pages/VerificationRequestsPage';
+import SystemHealthPage from './pages/SystemHealthPage';
 import UserDashboard from './pages/UserDashboard';
 
 function ProtectedRoute({ children, adminOnly = false }) {
@@ -128,6 +131,36 @@ function AppRoutes() {
           <ProtectedRoute adminOnly>
             <Layout>
               <MatchesPage />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/fraud-alerts"
+        element={
+          <ProtectedRoute adminOnly>
+            <Layout>
+              <FraudAlertsPage />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/verification"
+        element={
+          <ProtectedRoute adminOnly>
+            <Layout>
+              <VerificationRequestsPage />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/system-health"
+        element={
+          <ProtectedRoute adminOnly>
+            <Layout>
+              <SystemHealthPage />
             </Layout>
           </ProtectedRoute>
         }

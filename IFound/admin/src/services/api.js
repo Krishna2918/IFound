@@ -57,4 +57,25 @@ export const getMatches = (params) => api.get('/admin/matches', { params });
 export const getMatchStats = () => api.get('/admin/matches/stats');
 export const getUserMatches = (userId, params) => api.get(`/admin/users/${userId}/matches`, { params });
 
+// Fraud Alerts
+export const getFraudAlerts = (params) => api.get('/admin/fraud/alerts', { params });
+export const reviewFraudAlert = (alertId, data) => api.put(`/admin/fraud/alerts/${alertId}/review`, data);
+export const bulkReviewAlerts = (alertIds, status, notes) => api.post('/admin/fraud/alerts/bulk-review', { alertIds, status, notes });
+export const getFraudStats = () => api.get('/admin/fraud/stats');
+
+// Audit Logs
+export const getAuditLogs = (params) => api.get('/admin/audit/logs', { params });
+export const getSecuritySummary = (days) => api.get(`/admin/audit/security-summary?days=${days || 7}`);
+
+// Verification Management
+export const getPendingLEVerifications = (params) => api.get('/verification/admin/pending-le', { params });
+export const approveLEVerification = (userId, notes) => api.post(`/verification/admin/approve-le/${userId}`, { notes });
+export const rejectLEVerification = (userId, reason) => api.post(`/verification/admin/reject-le/${userId}`, { reason });
+export const adjustReputation = (userId, adjustment, reason) => api.post(`/verification/admin/adjust-reputation/${userId}`, { adjustment, reason });
+export const recalculateAllReputations = () => api.post('/verification/admin/recalculate-all');
+export const getLeaderboard = (params) => api.get('/verification/leaderboard', { params });
+
+// System Health
+export const getSystemHealth = () => api.get('/admin/health');
+
 export default api;

@@ -155,4 +155,165 @@ module.exports = {
     resolvedCaseDays: parseInt(process.env.RESOLVED_CASE_RETENTION_DAYS) || 365,
     userDataAfterDeletion: parseInt(process.env.USER_DATA_RETENTION_DAYS) || 30,
   },
+
+  // Image Matching / Visual DNA
+  imageMatching: {
+    confidenceThreshold: parseFloat(process.env.MATCH_CONFIDENCE_THRESHOLD) || 0.7,
+    highConfidenceThreshold: parseFloat(process.env.HIGH_CONFIDENCE_THRESHOLD) || 0.85,
+    autoNotifyAbove: parseFloat(process.env.AUTO_NOTIFY_THRESHOLD) || 0.8,
+    maxMatchesPerPhoto: parseInt(process.env.MAX_MATCHES_PER_PHOTO) || 50,
+    visualDNAEnabled: process.env.VISUAL_DNA_ENABLED !== 'false',
+  },
+
+  // System Limits
+  limits: {
+    maxActiveCasesPerUser: parseInt(process.env.MAX_ACTIVE_CASES_PER_USER) || 10,
+    maxPendingClaimsPerUser: parseInt(process.env.MAX_PENDING_CLAIMS_PER_USER) || 20,
+    maxMessagesPerConversation: parseInt(process.env.MAX_MESSAGES_PER_CONVERSATION) || 500,
+    maxSearchResults: parseInt(process.env.MAX_SEARCH_RESULTS) || 100,
+    paginationDefaultLimit: parseInt(process.env.PAGINATION_DEFAULT_LIMIT) || 20,
+    paginationMaxLimit: parseInt(process.env.PAGINATION_MAX_LIMIT) || 100,
+  },
+
+  // Geofencing
+  geofence: {
+    defaultRadiusKm: parseFloat(process.env.GEOFENCE_DEFAULT_RADIUS_KM) || 5,
+    maxRadiusKm: parseFloat(process.env.GEOFENCE_MAX_RADIUS_KM) || 50,
+    minRadiusKm: parseFloat(process.env.GEOFENCE_MIN_RADIUS_KM) || 0.5,
+    locationUpdateIntervalMinutes: parseInt(process.env.LOCATION_UPDATE_INTERVAL) || 15,
+  },
+
+  // Helper Methods
+
+  /**
+   * Get nested config value safely
+   */
+  get(path, defaultValue = null) {
+    const keys = path.split('.');
+    let value = this;
+    for (const key of keys) {
+      if (value && typeof value === 'object' && key in value) {
+        value = value[key];
+      } else {
+        return defaultValue;
+      }
+    }
+    return value;
+  },
+
+  /**
+   * Validate bounty amount based on case type and user verification level
+   */
+  validateBountyAmount(amount, caseType = 'lost_item', verificationStatus = 'unverified') {
+    if (amount < this.bounty.minAmount) {
+      return { valid: false, error: `Minimum bounty is $${this.bounty.minAmount}` };
+    }
+
+    // Check max based on verification status
+    const verificationLimits = this.verification.levels[verificationStatus];
+    const maxAllowed = verificationLimits?.maxBounty || this.bounty.maxAmountBasic;
+
+    if (amount > maxAllowed) {
+      return { valid: false, error: `Maximum bounty for your verification level is $${maxAllowed}` };
+    }
+
+    // Found items have additional restrictions
+    if (caseType === 'found_item' && amount > this.bounty.foundItemMaxBounty) {
+      return { valid: false, error: `Maximum reward for found items is $${this.bounty.foundItemMaxBounty}` };
+    }
+
+    return { valid: true };
+  },
+
+  /**
+   * Calculate platform fees and finder payout
+   */
+  calculateFees(amount) {
+    const platformFee = parseFloat((amount * this.bounty.platformFee).toFixed(2));
+    const finderAmount = parseFloat((amount - platformFee).toFixed(2));
+    return { platformFee, finderAmount, totalAmount: amount };
+  },
+
+  /**
+   * Check if ID verification is required for this amount
+   */
+  requiresIdVerification(amount) {
+    return amount >= this.verification.kycThreshold;
+  },
+
+  /**
+   * Get rate limit for a specific user type
+   */
+  getRateLimitForUserType(userType) {
+    const tier = this.rateLimit.tiers[userType] || this.rateLimit.tiers.anonymous;
+    return {
+      windowMs: this.rateLimit.windowMs,
+      max: tier.maxRequests,
+    };
+  },
+
+  /**
+   * Check if a category is enabled for the current launch phase
+   */
+  isCategoryEnabled(category) {
+    return this.categories.enabled.includes(category);
+  },
+
+  /**
+   * Check if a category requires special verification
+   */
+  getCategoryVerificationRequirement(category) {
+    return this.categories.requiresVerification[category] || null;
+  },
+
+  /**
+   * Get reputation tier label for a score
+   */
+  getReputationTier(score) {
+    if (score >= this.reputation.thresholds.expert) return 'expert';
+    if (score >= this.reputation.thresholds.verified) return 'verified';
+    if (score >= this.reputation.thresholds.trusted) return 'trusted';
+    return 'new';
+  },
+
+  /**
+   * Check if current time is within quiet hours
+   */
+  isQuietHours() {
+    if (!this.notifications.quietHours.enabled) return false;
+
+    const now = new Date();
+    const hour = now.getHours();
+    const start = this.notifications.quietHours.start;
+    const end = this.notifications.quietHours.end;
+
+    // Handle overnight quiet hours (e.g., 22:00 - 08:00)
+    if (start > end) {
+      return hour >= start || hour < end;
+    }
+    return hour >= start && hour < end;
+  },
+
+  /**
+   * Check if content contains selling keywords (anti-selling)
+   */
+  containsSellingKeywords(text) {
+    const lowerText = text.toLowerCase();
+    return this.moderation.sellingKeywords.some(keyword =>
+      lowerText.includes(keyword.toLowerCase())
+    );
+  },
+
+  /**
+   * Validate file upload
+   */
+  validateUpload(file) {
+    if (file.size > this.upload.maxFileSize) {
+      return { valid: false, error: 'File too large' };
+    }
+    if (!this.upload.allowedImageTypes.includes(file.mimetype)) {
+      return { valid: false, error: 'Invalid file type' };
+    }
+    return { valid: true };
+  },
 };
