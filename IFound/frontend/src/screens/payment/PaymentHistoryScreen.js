@@ -1,119 +1,145 @@
-import React, { useState } from 'react';
-import { View, StyleSheet, FlatList } from 'react-native';
-import { Card, Title, Paragraph, Chip, SegmentedButtons, Divider } from 'react-native-paper';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, StyleSheet, FlatList, RefreshControl } from 'react-native';
+import { Card, Title, Paragraph, Chip, SegmentedButtons, Divider, ActivityIndicator, Text } from 'react-native-paper';
 import { colors } from '../../config/theme';
+import { paymentAPI } from '../../services/api';
 
 const PaymentHistoryScreen = ({ navigation }) => {
   const [filter, setFilter] = useState('all');
+  const [transactions, setTransactions] = useState([]);
+  const [balance, setBalance] = useState({ received: 0, paid: 0, net: 0 });
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(null);
 
-  const mockTransactions = [
-    {
-      id: '1',
-      type: 'received',
-      amount: '$50',
-      description: 'Reward for finding iPhone 13',
-      date: '2024-11-05',
-      status: 'completed',
-      caseId: '1',
-    },
-    {
-      id: '2',
-      type: 'paid',
-      amount: '$100',
-      description: 'Reward for Lost Wallet case',
-      date: '2024-11-03',
-      status: 'completed',
-      caseId: '2',
-    },
-    {
-      id: '3',
-      type: 'received',
-      amount: '$25',
-      description: 'Reward for tip on Found Cat',
-      date: '2024-10-28',
-      status: 'pending',
-      caseId: '3',
-    },
-    {
-      id: '4',
-      type: 'paid',
-      amount: '$75',
-      description: 'Reward for Lost Dog case',
-      date: '2024-10-25',
-      status: 'completed',
-      caseId: '4',
-    },
-  ];
+  const fetchData = useCallback(async () => {
+    try {
+      setError(null);
+      const params = filter !== 'all' ? { type: filter } : {};
 
-  const getFilteredTransactions = () => {
-    if (filter === 'all') return mockTransactions;
-    return mockTransactions.filter(t => t.type === filter);
+      const [historyRes, balanceRes] = await Promise.all([
+        paymentAPI.getTransactionHistory(params),
+        paymentAPI.getUserBalance(),
+      ]);
+
+      setTransactions(historyRes.data?.transactions || []);
+
+      const balanceData = balanceRes.data || {};
+      setBalance({
+        received: parseFloat(balanceData.total_earned || 0),
+        paid: parseFloat(balanceData.total_spent || 0),
+        net: parseFloat(balanceData.available_balance || 0),
+      });
+    } catch (err) {
+      console.error('Failed to fetch payment data:', err);
+      setError(err.message || 'Failed to load payment history');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [filter]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchData();
   };
 
-  const calculateTotal = () => {
-    const received = mockTransactions
-      .filter(t => t.type === 'received' && t.status === 'completed')
-      .reduce((sum, t) => sum + parseFloat(t.amount.replace('$', '')), 0);
-
-    const paid = mockTransactions
-      .filter(t => t.type === 'paid' && t.status === 'completed')
-      .reduce((sum, t) => sum + parseFloat(t.amount.replace('$', '')), 0);
-
-    return { received, paid, net: received - paid };
+  const formatDate = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toLocaleDateString();
   };
 
-  const totals = calculateTotal();
+  const formatAmount = (amount) => {
+    return `$${parseFloat(amount || 0).toFixed(2)}`;
+  };
 
-  const renderTransaction = ({ item }) => (
-    <Card
-      style={styles.card}
-      onPress={() => navigation.navigate('CaseDetail', { caseId: item.caseId })}
-    >
-      <Card.Content>
-        <View style={styles.transactionHeader}>
-          <View style={styles.transactionInfo}>
-            <Title
-              style={[
-                styles.amount,
-                { color: item.type === 'received' ? colors.success : colors.error }
-              ]}
+  const getTransactionType = (transaction) => {
+    if (transaction.transaction_type === 'bounty_payment') {
+      return transaction.finder_id ? 'received' : 'paid';
+    }
+    return transaction.amount > 0 ? 'received' : 'paid';
+  };
+
+  const renderTransaction = ({ item }) => {
+    const type = getTransactionType(item);
+    const isReceived = type === 'received';
+
+    return (
+      <Card
+        style={styles.card}
+        onPress={() => item.case_id && navigation.navigate('CaseDetail', { caseId: item.case_id })}
+      >
+        <Card.Content>
+          <View style={styles.transactionHeader}>
+            <View style={styles.transactionInfo}>
+              <Title
+                style={[
+                  styles.amount,
+                  { color: isReceived ? colors.success : colors.error }
+                ]}
+              >
+                {isReceived ? '+' : '-'}{formatAmount(item.net_amount || item.amount)}
+              </Title>
+              <Paragraph style={styles.description}>
+                {item.metadata?.item_title || item.transaction_type?.replace('_', ' ') || 'Transaction'}
+              </Paragraph>
+            </View>
+            <Chip
+              mode="outlined"
+              textStyle={{
+                color: item.status === 'completed' ? colors.success : colors.warning,
+              }}
+              style={{
+                borderColor: item.status === 'completed' ? colors.success : colors.warning,
+              }}
             >
-              {item.type === 'received' ? '+' : '-'}{item.amount}
-            </Title>
-            <Paragraph style={styles.description}>{item.description}</Paragraph>
+              {item.status?.charAt(0).toUpperCase() + item.status?.slice(1)}
+            </Chip>
           </View>
-          <Chip
-            mode="outlined"
-            textStyle={{
-              color: item.status === 'completed' ? colors.success : colors.warning,
-            }}
-            style={{
-              borderColor: item.status === 'completed' ? colors.success : colors.warning,
-            }}
-          >
-            {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
-          </Chip>
-        </View>
 
-        <View style={styles.transactionFooter}>
-          <Paragraph style={styles.date}>📅 {item.date}</Paragraph>
-          <Chip
-            mode="flat"
-            style={{
-              backgroundColor: item.type === 'received'
-                ? colors.success + '20'
-                : colors.error + '20',
-            }}
-            textStyle={{
-              color: item.type === 'received' ? colors.success : colors.error,
-            }}
-          >
-            {item.type === 'received' ? 'Received' : 'Paid'}
-          </Chip>
-        </View>
-      </Card.Content>
-    </Card>
-  );
+          <View style={styles.transactionFooter}>
+            <Paragraph style={styles.date}>{formatDate(item.createdAt)}</Paragraph>
+            <Chip
+              mode="flat"
+              style={{
+                backgroundColor: isReceived
+                  ? colors.success + '20'
+                  : colors.error + '20',
+              }}
+              textStyle={{
+                color: isReceived ? colors.success : colors.error,
+              }}
+            >
+              {isReceived ? 'Received' : 'Paid'}
+            </Chip>
+          </View>
+        </Card.Content>
+      </Card>
+    );
+  };
+
+  if (loading && !refreshing) {
+    return (
+      <View style={styles.centerContainer}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={styles.loadingText}>Loading payment history...</Text>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.centerContainer}>
+        <Text style={styles.errorText}>{error}</Text>
+        <Chip icon="refresh" onPress={fetchData}>Retry</Chip>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -122,26 +148,26 @@ const PaymentHistoryScreen = ({ navigation }) => {
           <Title style={styles.summaryTitle}>Payment Summary</Title>
           <View style={styles.summaryGrid}>
             <View style={styles.summaryItem}>
-              <Paragraph style={styles.summaryLabel}>Total Received</Paragraph>
+              <Paragraph style={styles.summaryLabel}>Total Earned</Paragraph>
               <Title style={[styles.summaryValue, { color: colors.success }]}>
-                ${totals.received.toFixed(2)}
+                ${balance.received.toFixed(2)}
               </Title>
             </View>
             <View style={styles.summaryItem}>
-              <Paragraph style={styles.summaryLabel}>Total Paid</Paragraph>
+              <Paragraph style={styles.summaryLabel}>Total Spent</Paragraph>
               <Title style={[styles.summaryValue, { color: colors.error }]}>
-                ${totals.paid.toFixed(2)}
+                ${balance.paid.toFixed(2)}
               </Title>
             </View>
             <View style={styles.summaryItemFull}>
-              <Paragraph style={styles.summaryLabel}>Net Balance</Paragraph>
+              <Paragraph style={styles.summaryLabel}>Available Balance</Paragraph>
               <Title
                 style={[
                   styles.summaryValue,
-                  { color: totals.net >= 0 ? colors.success : colors.error }
+                  { color: balance.net >= 0 ? colors.success : colors.error }
                 ]}
               >
-                ${Math.abs(totals.net).toFixed(2)}
+                ${Math.abs(balance.net).toFixed(2)}
               </Title>
             </View>
           </View>
@@ -154,21 +180,27 @@ const PaymentHistoryScreen = ({ navigation }) => {
           onValueChange={setFilter}
           buttons={[
             { value: 'all', label: 'All' },
-            { value: 'received', label: 'Received' },
-            { value: 'paid', label: 'Paid' },
+            { value: 'bounty_payment', label: 'Bounties' },
+            { value: 'withdrawal', label: 'Withdrawals' },
           ]}
         />
       </View>
 
       <FlatList
-        data={getFilteredTransactions()}
+        data={transactions}
         renderItem={renderTransaction}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
         ItemSeparatorComponent={() => <Divider style={styles.divider} />}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Paragraph>No transactions found</Paragraph>
+            <Paragraph style={styles.emptySubtext}>
+              Your payment history will appear here
+            </Paragraph>
           </View>
         }
       />
@@ -180,6 +212,21 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  centerContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+  },
+  loadingText: {
+    marginTop: 16,
+    color: colors.placeholder,
+  },
+  errorText: {
+    marginBottom: 16,
+    color: colors.error,
+    textAlign: 'center',
   },
   summaryCard: {
     margin: 16,
@@ -266,6 +313,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 32,
+  },
+  emptySubtext: {
+    color: colors.placeholder,
+    marginTop: 4,
   },
 });
 

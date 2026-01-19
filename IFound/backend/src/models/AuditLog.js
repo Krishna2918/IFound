@@ -162,19 +162,20 @@ const AuditLog = sequelize.define('AuditLog', {
 
 }, {
   tableName: 'audit_logs',
+  underscored: true,
   indexes: [
     { fields: ['user_id'] },
     { fields: ['action_category'] },
     { fields: ['action'] },
     { fields: ['entity_type', 'entity_id'] },
     { fields: ['ip_address'] },
-    { fields: ['createdAt'] },
+    { fields: ['created_at'] },
     { fields: ['success'] },
     { fields: ['risk_level'] },
     { fields: ['session_id'] },
     // Composite for common queries
-    { fields: ['user_id', 'action_category', 'createdAt'] },
-    { fields: ['action_category', 'action', 'createdAt'] },
+    { fields: ['user_id', 'action_category', 'created_at'] },
+    { fields: ['action_category', 'action', 'created_at'] },
   ],
   // Don't allow updates or deletes on audit logs
   hooks: {

@@ -21,6 +21,9 @@ const claimRoutes = require('../claimRoutes');
 const messageRoutes = require('../messages');
 const notificationRoutes = require('../notifications');
 const verificationRoutes = require('../verification');
+const escrowRoutes = require('../escrow');
+const searchRoutes = require('../search');
+const lawEnforcementRoutes = require('../lawEnforcement');
 
 const businessRules = require('../../config/businessRules');
 const logger = require('../../config/logger');
@@ -114,6 +117,9 @@ router.use('/claims', claimRoutes);
 router.use('/messages', messageRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/verification', verificationRoutes);
+router.use('/escrow', escrowRoutes);
+router.use('/search', searchRoutes);
+router.use('/law-enforcement', lawEnforcementRoutes);
 router.use('/', visualDNARoutes); // Visual DNA routes at root level
 
 // Version info endpoint
@@ -129,11 +135,14 @@ router.get('/', (req, res) => {
       submissions: '/api/v1/submissions',
       photos: '/api/v1/photos',
       payments: '/api/v1/payments',
+      escrow: '/api/v1/escrow',
       matches: '/api/v1/matches',
       claims: '/api/v1/claims',
       messages: '/api/v1/messages',
       notifications: '/api/v1/notifications',
       verification: '/api/v1/verification',
+      search: '/api/v1/search',
+      lawEnforcement: '/api/v1/law-enforcement',
       admin: '/api/v1/admin',
       ai: '/api/v1/ai',
     },

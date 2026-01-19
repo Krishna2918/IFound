@@ -1,53 +1,38 @@
-import React, { useState } from 'react';
-import { View, StyleSheet, FlatList } from 'react-native';
-import { Card, Title, Paragraph, Chip, FAB, SegmentedButtons, IconButton } from 'react-native-paper';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, StyleSheet, FlatList, RefreshControl } from 'react-native';
+import { Card, Title, Paragraph, Chip, FAB, SegmentedButtons, IconButton, ActivityIndicator, Text } from 'react-native-paper';
 import { colors } from '../../config/theme';
+import { caseAPI } from '../../services/api';
 
 const MyCasesScreen = ({ navigation }) => {
   const [filter, setFilter] = useState('all');
+  const [cases, setCases] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(null);
 
-  const mockCases = [
-    {
-      id: '1',
-      title: 'Lost iPhone 13',
-      category: 'Electronics',
-      status: 'active',
-      date: '2024-11-05',
-      tipsCount: 3,
-      reward: '$50',
-    },
-    {
-      id: '2',
-      title: 'Found Cat',
-      category: 'Pets',
-      status: 'resolved',
-      date: '2024-11-03',
-      tipsCount: 5,
-      reward: 'No reward',
-    },
-    {
-      id: '3',
-      title: 'Lost Wallet',
-      category: 'Personal Items',
-      status: 'active',
-      date: '2024-11-01',
-      tipsCount: 1,
-      reward: '$100',
-    },
-    {
-      id: '4',
-      title: 'Lost Keys',
-      category: 'Personal Items',
-      status: 'closed',
-      date: '2024-10-28',
-      tipsCount: 0,
-      reward: '$20',
-    },
-  ];
+  const fetchMyCases = useCallback(async () => {
+    try {
+      setError(null);
+      const params = filter !== 'all' ? { status: filter } : {};
+      const response = await caseAPI.getMyCases(params);
+      setCases(response.data?.cases || []);
+    } catch (err) {
+      console.error('Failed to fetch cases:', err);
+      setError(err.message || 'Failed to load cases');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [filter]);
 
-  const getFilteredCases = () => {
-    if (filter === 'all') return mockCases;
-    return mockCases.filter(c => c.status === filter);
+  useEffect(() => {
+    fetchMyCases();
+  }, [fetchMyCases]);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchMyCases();
   };
 
   const getStatusColor = (status) => {
@@ -55,7 +40,11 @@ const MyCasesScreen = ({ navigation }) => {
       case 'active':
         return colors.success;
       case 'resolved':
+      case 'completed':
         return colors.primary;
+      case 'claimed':
+        return '#F59E0B';
+      case 'expired':
       case 'closed':
         return colors.disabled;
       default:
@@ -64,7 +53,18 @@ const MyCasesScreen = ({ navigation }) => {
   };
 
   const getStatusLabel = (status) => {
-    return status.charAt(0).toUpperCase() + status.slice(1);
+    return status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ');
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toLocaleDateString();
+  };
+
+  const formatReward = (amount) => {
+    if (!amount || amount === 0) return 'No reward';
+    return `$${parseFloat(amount).toFixed(0)}`;
   };
 
   const renderCase = ({ item }) => (
@@ -92,21 +92,45 @@ const MyCasesScreen = ({ navigation }) => {
         </View>
 
         <View style={styles.metadata}>
-          <Chip icon="tag" style={styles.metaChip}>{item.category}</Chip>
-          <Chip icon="calendar" style={styles.metaChip}>{item.date}</Chip>
+          <Chip icon="tag" style={styles.metaChip}>
+            {item.item_category || item.case_type || 'Other'}
+          </Chip>
+          <Chip icon="calendar" style={styles.metaChip}>
+            {formatDate(item.createdAt)}
+          </Chip>
         </View>
 
         <View style={styles.footer}>
           <View style={styles.tipsContainer}>
             <Paragraph style={styles.tipsText}>
-              💬 {item.tipsCount} {item.tipsCount === 1 ? 'tip' : 'tips'}
+              {item.view_count || 0} views
             </Paragraph>
           </View>
-          <Paragraph style={styles.reward}>{item.reward}</Paragraph>
+          <Paragraph style={styles.reward}>
+            {formatReward(item.bounty_amount)}
+          </Paragraph>
         </View>
       </Card.Content>
     </Card>
   );
+
+  if (loading && !refreshing) {
+    return (
+      <View style={styles.centerContainer}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={styles.loadingText}>Loading your cases...</Text>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.centerContainer}>
+        <Text style={styles.errorText}>{error}</Text>
+        <Chip icon="refresh" onPress={fetchMyCases}>Retry</Chip>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -117,20 +141,26 @@ const MyCasesScreen = ({ navigation }) => {
           buttons={[
             { value: 'all', label: 'All' },
             { value: 'active', label: 'Active' },
+            { value: 'claimed', label: 'Claimed' },
             { value: 'resolved', label: 'Resolved' },
-            { value: 'closed', label: 'Closed' },
           ]}
         />
       </View>
 
       <FlatList
-        data={getFilteredCases()}
+        data={cases}
         renderItem={renderCase}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Paragraph>No cases found</Paragraph>
+            <Paragraph style={styles.emptySubtext}>
+              Post a case to find your lost item
+            </Paragraph>
           </View>
         }
       />
@@ -149,6 +179,21 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  centerContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+  },
+  loadingText: {
+    marginTop: 16,
+    color: colors.placeholder,
+  },
+  errorText: {
+    marginBottom: 16,
+    color: colors.error,
+    textAlign: 'center',
   },
   filterContainer: {
     padding: 16,
@@ -212,6 +257,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 32,
+  },
+  emptySubtext: {
+    color: colors.placeholder,
+    marginTop: 4,
   },
   fab: {
     position: 'absolute',

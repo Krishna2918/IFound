@@ -19,6 +19,7 @@ const { validateEnv, getSafeEnvInfo } = require('./config/validateEnv');
 // Import routes
 const v1Routes = require('./routes/v1');
 const businessRules = require('./config/businessRules');
+const workers = require('./workers');
 
 // Validate environment variables before starting
 validateEnv({ exitOnError: process.env.NODE_ENV === 'production' });
@@ -164,6 +165,16 @@ const startServer = async () => {
         port: PORT,
       });
 
+      // Start background workers
+      if (process.env.ENABLE_WORKERS !== 'false') {
+        try {
+          workers.startWorkers();
+          logger.info('Background workers started');
+        } catch (workerError) {
+          logger.error('Failed to start background workers:', workerError);
+        }
+      }
+
       console.log(`
 ╔════════════════════════════════════════════════════════════╗
 ║                                                            ║
@@ -202,6 +213,11 @@ process.on('uncaughtException', (err) => {
 // Graceful shutdown
 process.on('SIGTERM', () => {
   logger.info('SIGTERM received, shutting down gracefully');
+  try {
+    workers.stopWorkers();
+  } catch (error) {
+    logger.error('Error stopping workers during shutdown:', error);
+  }
   process.exit(0);
 });
 

@@ -9,6 +9,10 @@ const {
   getEarningsSummary,
   requestWithdrawal,
   handleStripeWebhook,
+  createConnectAccount,
+  getConnectOnboardingLink,
+  getConnectAccountStatus,
+  getConnectDashboardLink,
 } = require('../controllers/paymentController');
 const { authenticateToken } = require('../middleware/auth');
 
@@ -39,6 +43,12 @@ router.get('/balance', getUserBalance);
 // Earnings and withdrawal routes
 router.get('/earnings', getEarningsSummary);
 router.post('/withdraw', requestWithdrawal);
+
+// Stripe Connect routes for finders
+router.post('/connect/create', createConnectAccount);
+router.get('/connect/onboarding-link', getConnectOnboardingLink);
+router.get('/connect/status', getConnectAccountStatus);
+router.get('/connect/dashboard', getConnectDashboardLink);
 
 // Export both router and webhook handler
 module.exports = router;

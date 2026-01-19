@@ -10,6 +10,8 @@ const logger = require('../config/logger');
 const { Op } = require('sequelize');
 const { validateClaimContent } = require('../services/contentModerationService');
 const { sendInitialMessages } = require('./messageController');
+const escrowService = require('../services/escrowService');
+const notificationService = require('../services/notificationService');
 
 // Platform service fee rate (2.5% from claimant's bounty)
 const PLATFORM_COMMISSION_RATE = 0.025;
@@ -134,7 +136,16 @@ const createClaim = asyncHandler(async (req, res) => {
 
   logger.info(`Claim created: ${claim.id} by user ${claimant_id} on case ${found_case_id}`);
 
-  // TODO: Send notification to the finder about the new claim
+  // Send notification to the finder about the new claim
+  try {
+    await notificationService.notifyClaimReceived(
+      foundCase.poster_id,
+      claim,
+      foundCase
+    );
+  } catch (notifError) {
+    logger.error('Failed to send claim notification:', notifError);
+  }
 
   res.status(201).json({
     success: true,
@@ -336,6 +347,35 @@ const acceptClaim = asyncHandler(async (req, res) => {
   claim.accepted_at = new Date();
   claim.finder_notes = finder_notes || null;
   claim.chat_enabled = true;
+
+  // Create escrow hold for the bounty if offered
+  const bountyAmount = parseFloat(claim.bounty_offered) || 0;
+  if (bountyAmount > 0) {
+    try {
+      // Create a temporary case data object for escrow
+      const escrowCaseData = {
+        id: claim.found_case_id,
+        title: claim.foundCase.title,
+        bounty_amount: bountyAmount,
+        platform_commission: bountyAmount * PLATFORM_COMMISSION_RATE,
+      };
+
+      const escrowResult = await escrowService.createEscrowHold(
+        escrowCaseData,
+        claim.claimant_id // Claimant pays the bounty
+      );
+
+      claim.payment_transaction_id = escrowResult.transaction.id;
+      claim.payment_status = 'processing';
+
+      logger.info(`Escrow hold created for claim ${claimId}, transaction ${escrowResult.transaction.id}`);
+    } catch (escrowError) {
+      logger.error(`Failed to create escrow for claim ${claimId}:`, escrowError);
+      // Continue without escrow in test mode
+      claim.payment_status = 'pending';
+    }
+  }
+
   await claim.save();
 
   // Update found case status to 'claimed' and assign case number
@@ -343,6 +383,8 @@ const acceptClaim = asyncHandler(async (req, res) => {
     {
       status: 'claimed',
       case_number: caseNumber,
+      bounty_amount: bountyAmount,
+      bounty_status: bountyAmount > 0 ? 'held' : 'pending',
     },
     { where: { id: claim.found_case_id } }
   );
@@ -373,7 +415,23 @@ const acceptClaim = asyncHandler(async (req, res) => {
     claim.foundCase.title
   );
 
-  // TODO: Send notification to claimant
+  // Send notification to claimant about accepted claim
+  try {
+    await notificationService.sendNotification({
+      userId: claim.claimant_id,
+      type: 'claim_accepted',
+      title: 'Your Claim Was Accepted!',
+      body: `Good news! Your claim for "${claim.foundCase.title}" has been accepted. You can now chat with the finder.`,
+      data: { claimId: claim.id, caseId: claim.found_case_id },
+      actionUrl: `ifound://claim/${claim.id}`,
+      entityType: 'Claim',
+      entityId: claim.id,
+      priority: 'high',
+      channels: ['push', 'email', 'inapp'],
+    });
+  } catch (notifError) {
+    logger.error('Failed to send claim accepted notification:', notifError);
+  }
 
   res.status(200).json({
     success: true,
@@ -426,7 +484,16 @@ const rejectClaim = asyncHandler(async (req, res) => {
 
   logger.info(`Claim ${claimId} rejected by finder ${userId}`);
 
-  // TODO: Send notification to claimant
+  // Send notification to claimant about rejected claim
+  try {
+    await notificationService.notifyClaimRejected(
+      claim.claimant_id,
+      claim,
+      rejection_reason || 'The finder could not verify your ownership.'
+    );
+  } catch (notifError) {
+    logger.error('Failed to send claim rejected notification:', notifError);
+  }
 
   res.status(200).json({
     success: true,
@@ -494,48 +561,144 @@ const confirmHandover = asyncHandler(async (req, res) => {
         status: 'archived',
         resolved_at: new Date(),
         resolved_by: claim.claimant_id,
+        bounty_status: 'paid',
       },
       { where: { id: claim.found_case_id } }
     );
 
-    // Process bounty payment - create transaction for finder
+    // Process bounty payment - release escrow to finder
     const bountyAmount = parseFloat(claim.bounty_offered) || 0;
     if (bountyAmount > 0) {
-      const platformCommission = bountyAmount * PLATFORM_COMMISSION_RATE;
-      const netAmount = bountyAmount - platformCommission;
+      const finderId = claim.foundCase.poster_id; // Finder is the one who posted the found item
 
-      // Create transaction record for the finder's earnings
-      const transaction = await Transaction.create({
-        case_id: claim.found_case_id,
-        finder_id: claim.foundCase.poster_id, // Finder is the one who posted the found item
-        poster_id: claim.claimant_id, // Claimant is the one who paid the bounty
-        transaction_type: 'bounty_payment',
-        amount: bountyAmount,
-        platform_commission: platformCommission,
-        net_amount: netAmount,
-        currency: 'CAD',
-        status: 'completed', // Mark as completed (funds available for withdrawal)
-        payment_method: 'stripe',
-        completed_at: new Date(),
-        metadata: {
+      // Check if there's an existing escrow transaction to release
+      if (claim.payment_transaction_id) {
+        try {
+          const releaseResult = await escrowService.releaseEscrow(
+            claim.payment_transaction_id,
+            finderId,
+            claim.id
+          );
+
+          claim.payment_status = 'completed';
+
+          const netAmount = parseFloat(releaseResult.transaction.net_amount);
+
+          // Send system message about payment
+          await Message.create({
+            claim_id: claim.id,
+            sender_id: finderId,
+            content: `Transaction completed! $${netAmount.toFixed(2)} CAD has been added to your earnings (after platform fee).`,
+            message_type: 'system',
+          });
+
+          logger.info(`Escrow released to finder for claim ${claimId}, amount: $${netAmount.toFixed(2)}`);
+
+          // Send payment notification to finder
+          try {
+            await notificationService.notifyPaymentReceived(
+              finderId,
+              netAmount.toFixed(2),
+              releaseResult.transaction.id
+            );
+          } catch (notifError) {
+            logger.error('Failed to send payment notification:', notifError);
+          }
+        } catch (escrowError) {
+          logger.error(`Failed to release escrow for claim ${claimId}:`, escrowError);
+          // Fallback: create a direct transaction if escrow release fails
+          const platformCommission = bountyAmount * PLATFORM_COMMISSION_RATE;
+          const netAmount = bountyAmount - platformCommission;
+
+          const transaction = await Transaction.create({
+            case_id: claim.found_case_id,
+            finder_id: finderId,
+            poster_id: claim.claimant_id,
+            transaction_type: 'bounty_payment',
+            amount: bountyAmount,
+            platform_commission: platformCommission,
+            net_amount: netAmount,
+            currency: 'CAD',
+            status: 'completed',
+            payment_method: 'stripe',
+            completed_at: new Date(),
+            metadata: {
+              claim_id: claim.id,
+              item_title: claim.foundCase.title,
+              fallback: true,
+              original_transaction_id: claim.payment_transaction_id,
+            },
+          });
+
+          claim.payment_transaction_id = transaction.id;
+          claim.payment_status = 'completed';
+
+          await Message.create({
+            claim_id: claim.id,
+            sender_id: finderId,
+            content: `Transaction completed! $${netAmount.toFixed(2)} CAD has been added to your earnings (after ${(PLATFORM_COMMISSION_RATE * 100).toFixed(1)}% platform fee).`,
+            message_type: 'system',
+          });
+
+          logger.info(`Fallback payment of $${netAmount.toFixed(2)} CAD created for finder on claim ${claimId}`);
+
+          // Send payment notification to finder
+          try {
+            await notificationService.notifyPaymentReceived(
+              finderId,
+              netAmount.toFixed(2),
+              transaction.id
+            );
+          } catch (notifError) {
+            logger.error('Failed to send payment notification:', notifError);
+          }
+        }
+      } else {
+        // No escrow was created (test mode or failed), create direct transaction
+        const platformCommission = bountyAmount * PLATFORM_COMMISSION_RATE;
+        const netAmount = bountyAmount - platformCommission;
+
+        const transaction = await Transaction.create({
+          case_id: claim.found_case_id,
+          finder_id: finderId,
+          poster_id: claim.claimant_id,
+          transaction_type: 'bounty_payment',
+          amount: bountyAmount,
+          platform_commission: platformCommission,
+          net_amount: netAmount,
+          currency: 'CAD',
+          status: 'completed',
+          payment_method: 'stripe',
+          completed_at: new Date(),
+          metadata: {
+            claim_id: claim.id,
+            item_title: claim.foundCase.title,
+          },
+        });
+
+        claim.payment_transaction_id = transaction.id;
+        claim.payment_status = 'completed';
+
+        await Message.create({
           claim_id: claim.id,
-          item_title: claim.foundCase.title,
-        },
-      });
+          sender_id: finderId,
+          content: `Transaction completed! $${netAmount.toFixed(2)} CAD has been added to your earnings (after ${(PLATFORM_COMMISSION_RATE * 100).toFixed(1)}% platform fee).`,
+          message_type: 'system',
+        });
 
-      // Update claim with payment transaction reference
-      claim.payment_transaction_id = transaction.id;
-      claim.payment_status = 'completed';
+        logger.info(`Direct payment of $${netAmount.toFixed(2)} CAD created for finder on claim ${claimId}`);
 
-      // Send system message about payment
-      await Message.create({
-        claim_id: claim.id,
-        sender_id: claim.foundCase.poster_id,
-        content: `Transaction completed! $${netAmount.toFixed(2)} CAD has been added to your earnings (after ${(PLATFORM_COMMISSION_RATE * 100).toFixed(0)}% platform fee).`,
-        message_type: 'system',
-      });
-
-      logger.info(`Payment of $${netAmount.toFixed(2)} CAD created for finder on claim ${claimId}`);
+        // Send payment notification to finder
+        try {
+          await notificationService.notifyPaymentReceived(
+            finderId,
+            netAmount.toFixed(2),
+            transaction.id
+          );
+        } catch (notifError) {
+          logger.error('Failed to send payment notification:', notifError);
+        }
+      }
     }
 
     logger.info(`Claim ${claimId} completed - handover confirmed by both parties`);
@@ -584,8 +747,30 @@ const cancelClaim = asyncHandler(async (req, res) => {
     });
   }
 
+  // Refund escrow if there was one
+  if (claim.payment_transaction_id && claim.payment_status === 'processing') {
+    try {
+      await escrowService.refundEscrow(
+        claim.payment_transaction_id,
+        'Claim cancelled by claimant'
+      );
+      claim.payment_status = 'refunded';
+      logger.info(`Escrow refunded for cancelled claim ${claimId}`);
+    } catch (refundError) {
+      logger.error(`Failed to refund escrow for claim ${claimId}:`, refundError);
+    }
+  }
+
   claim.status = 'cancelled';
   await claim.save();
+
+  // Update case status back to active if it was claimed
+  if (claim.found_case_id) {
+    await Case.update(
+      { status: 'active', bounty_status: 'pending' },
+      { where: { id: claim.found_case_id, status: 'claimed' } }
+    );
+  }
 
   logger.info(`Claim ${claimId} cancelled by claimant ${userId}`);
 
@@ -647,7 +832,22 @@ const addVerificationQuestion = asyncHandler(async (req, res) => {
   claim.verification_questions = questions;
   await claim.save();
 
-  // TODO: Send notification to claimant
+  // Send notification to claimant about verification question
+  try {
+    await notificationService.sendNotification({
+      userId: claim.claimant_id,
+      type: 'verification_question',
+      title: 'Verification Question',
+      body: `The finder has asked you a question about your claim for "${claim.foundCase.title}"`,
+      data: { claimId: claim.id, questionIndex: questions.length - 1 },
+      actionUrl: `ifound://claim/${claim.id}/verify`,
+      entityType: 'Claim',
+      entityId: claim.id,
+      channels: ['push', 'email', 'inapp'],
+    });
+  } catch (notifError) {
+    logger.error('Failed to send verification question notification:', notifError);
+  }
 
   res.status(200).json({
     success: true,
@@ -704,7 +904,25 @@ const answerVerificationQuestion = asyncHandler(async (req, res) => {
   claim.verification_questions = questions;
   await claim.save();
 
-  // TODO: Send notification to finder
+  // Get the finder to notify them
+  const foundCase = await Case.findByPk(claim.found_case_id);
+  if (foundCase) {
+    try {
+      await notificationService.sendNotification({
+        userId: foundCase.poster_id,
+        type: 'verification_answer',
+        title: 'Verification Answer Received',
+        body: `The claimant has answered your verification question`,
+        data: { claimId: claim.id, questionIndex: index },
+        actionUrl: `ifound://claim/${claim.id}/review`,
+        entityType: 'Claim',
+        entityId: claim.id,
+        channels: ['push', 'inapp'],
+      });
+    } catch (notifError) {
+      logger.error('Failed to send verification answer notification:', notifError);
+    }
+  }
 
   res.status(200).json({
     success: true,

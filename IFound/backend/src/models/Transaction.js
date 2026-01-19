@@ -68,7 +68,7 @@ const Transaction = sequelize.define('Transaction', {
     defaultValue: 'USD',
   },
   status: {
-    type: DataTypes.ENUM('pending', 'escrow', 'processing', 'completed', 'failed', 'refunded', 'cancelled'),
+    type: DataTypes.ENUM('pending', 'escrow', 'processing', 'completed', 'failed', 'refunded', 'cancelled', 'disputed'),
     allowNull: false,
     defaultValue: 'pending',
   },

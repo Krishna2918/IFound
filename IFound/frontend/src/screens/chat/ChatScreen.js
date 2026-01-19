@@ -469,7 +469,7 @@ const mockMessages = [
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: colors.background,
   },
   centered: {
     flex: 1,
@@ -477,20 +477,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   header: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
+    borderBottomColor: colors.border,
   },
   headerTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: colors.text,
   },
   headerSubtitle: {
     fontSize: 13,
-    color: '#666',
+    color: colors.onSurfaceVariant,
     marginTop: 2,
   },
   messagesList: {
@@ -510,7 +510,7 @@ const styles = StyleSheet.create({
   },
   avatar: {
     marginRight: 8,
-    backgroundColor: '#E0E0E0',
+    backgroundColor: colors.surfaceVariant,
   },
   messageBubble: {
     maxWidth: '75%',
@@ -522,7 +522,7 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 4,
   },
   otherMessageBubble: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderBottomLeftRadius: 4,
   },
   sendingMessage: {
@@ -530,20 +530,20 @@ const styles = StyleSheet.create({
   },
   messageText: {
     fontSize: 15,
-    color: '#333',
+    color: colors.text,
     lineHeight: 20,
   },
   myMessageText: {
-    color: '#FFFFFF',
+    color: colors.onPrimary,
   },
   messageTime: {
     fontSize: 11,
-    color: '#999',
+    color: colors.onSurfaceVariant,
     marginTop: 4,
     alignSelf: 'flex-end',
   },
   myMessageTime: {
-    color: 'rgba(255,255,255,0.7)',
+    color: 'rgba(4,47,46,0.7)',
   },
   systemMessageContainer: {
     alignItems: 'center',
@@ -551,8 +551,8 @@ const styles = StyleSheet.create({
   },
   systemMessageText: {
     fontSize: 13,
-    color: '#666',
-    backgroundColor: '#E8E8E8',
+    color: colors.onSurfaceVariant,
+    backgroundColor: colors.surfaceVariant,
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 16,
@@ -568,7 +568,7 @@ const styles = StyleSheet.create({
   },
   locationHint: {
     fontSize: 11,
-    color: '#666',
+    color: colors.onSurfaceVariant,
     marginTop: 4,
     fontStyle: 'italic',
   },
@@ -581,16 +581,16 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   handoverCard: {
-    backgroundColor: '#FFF3CD',
+    backgroundColor: '#78350F',
     borderRadius: 8,
   },
   handoverTitle: {
     fontWeight: 'bold',
     marginBottom: 4,
-    color: '#856404',
+    color: '#FCD34D',
   },
   handoverText: {
-    color: '#856404',
+    color: '#FDE68A',
     marginBottom: 8,
   },
   handoverButton: {
@@ -602,9 +602,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 8,
     paddingVertical: 8,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderTopWidth: 1,
-    borderTopColor: '#E0E0E0',
+    borderTopColor: colors.border,
   },
   attachButton: {
     margin: 0,
@@ -613,7 +613,7 @@ const styles = StyleSheet.create({
     flex: 1,
     maxHeight: 100,
     marginHorizontal: 4,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: colors.surfaceVariant,
   },
   inputOutline: {
     borderRadius: 20,
@@ -634,11 +634,11 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#666',
+    color: colors.text,
   },
   emptySubtext: {
     fontSize: 14,
-    color: '#999',
+    color: colors.onSurfaceVariant,
     marginTop: 8,
     textAlign: 'center',
   },

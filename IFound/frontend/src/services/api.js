@@ -140,4 +140,18 @@ export const messageAPI = {
   }),
 };
 
+// Search endpoints (Elasticsearch-powered)
+export const searchAPI = {
+  // Full-text search with filters
+  searchCases: (params) => api.get('/search/cases', { params }),
+  // Autocomplete suggestions
+  getSuggestions: (query, limit = 5) => api.get('/search/suggestions', {
+    params: { q: query, limit }
+  }),
+  // Get nearby cases based on location
+  getNearbyCases: (params) => api.get('/search/nearby', { params }),
+  // Get smart bounty pricing suggestion
+  getPricingSuggestion: (data) => api.post('/search/pricing-suggestion', data),
+};
+
 export default api;

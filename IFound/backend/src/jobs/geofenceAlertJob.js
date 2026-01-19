@@ -82,7 +82,7 @@ async function checkExpiringCases() {
           {
             model: User,
             as: 'poster',
-            attributes: ['id', 'email', 'full_name'],
+            attributes: ['id', 'email', 'first_name', 'last_name'],
           },
         ],
       });

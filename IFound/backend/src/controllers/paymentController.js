@@ -616,6 +616,250 @@ async function handlePayoutFailed(payout) {
   });
 }
 
+// @desc    Create Stripe Connect account for finder (onboarding)
+// @route   POST /api/v1/payments/connect/create
+// @access  Private
+const createConnectAccount = asyncHandler(async (req, res) => {
+  const userId = req.userId;
+
+  const user = await User.findByPk(userId);
+  if (!user) {
+    return res.status(404).json({
+      success: false,
+      message: 'User not found',
+    });
+  }
+
+  // Check if user already has a Connect account
+  if (user.stripe_account_id) {
+    return res.status(400).json({
+      success: false,
+      message: 'You already have a connected Stripe account',
+      data: { stripe_account_id: user.stripe_account_id },
+    });
+  }
+
+  if (!stripe) {
+    // Simulate for test mode
+    const mockAccountId = `acct_test_${Date.now()}`;
+    await user.update({ stripe_account_id: mockAccountId });
+
+    logger.info('Created simulated Connect account', { userId, accountId: mockAccountId });
+
+    return res.status(201).json({
+      success: true,
+      message: 'Connect account created (test mode)',
+      data: {
+        account_id: mockAccountId,
+        onboarding_url: null,
+        test_mode: true,
+      },
+    });
+  }
+
+  try {
+    // Create a Stripe Connect Express account
+    const account = await stripe.accounts.create({
+      type: 'express',
+      country: 'CA', // Default to Canada, can be made dynamic
+      email: user.email,
+      capabilities: {
+        card_payments: { requested: true },
+        transfers: { requested: true },
+      },
+      business_type: 'individual',
+      metadata: {
+        user_id: userId,
+        platform: 'ifound',
+      },
+    });
+
+    // Save the account ID to the user
+    await user.update({ stripe_account_id: account.id });
+
+    logger.audit('stripe_connect_created', userId, {
+      stripeAccountId: account.id,
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Stripe Connect account created',
+      data: {
+        account_id: account.id,
+        details_submitted: account.details_submitted,
+        payouts_enabled: account.payouts_enabled,
+      },
+    });
+  } catch (error) {
+    logger.errorWithContext(error, { action: 'createConnectAccount', userId });
+    throw error;
+  }
+});
+
+// @desc    Get Stripe Connect onboarding link
+// @route   GET /api/v1/payments/connect/onboarding-link
+// @access  Private
+const getConnectOnboardingLink = asyncHandler(async (req, res) => {
+  const userId = req.userId;
+
+  const user = await User.findByPk(userId);
+  if (!user) {
+    return res.status(404).json({
+      success: false,
+      message: 'User not found',
+    });
+  }
+
+  if (!user.stripe_account_id) {
+    return res.status(400).json({
+      success: false,
+      message: 'No Stripe Connect account found. Please create one first.',
+    });
+  }
+
+  if (!stripe) {
+    return res.status(200).json({
+      success: true,
+      message: 'Onboarding not required in test mode',
+      data: {
+        url: null,
+        test_mode: true,
+        account_complete: true,
+      },
+    });
+  }
+
+  try {
+    const { return_url, refresh_url } = req.query;
+
+    const accountLink = await stripe.accountLinks.create({
+      account: user.stripe_account_id,
+      refresh_url: refresh_url || `${process.env.FRONTEND_URL || 'http://localhost:3000'}/settings/payments?refresh=true`,
+      return_url: return_url || `${process.env.FRONTEND_URL || 'http://localhost:3000'}/settings/payments?onboarding=complete`,
+      type: 'account_onboarding',
+    });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        url: accountLink.url,
+        expires_at: new Date(accountLink.expires_at * 1000).toISOString(),
+      },
+    });
+  } catch (error) {
+    logger.errorWithContext(error, { action: 'getConnectOnboardingLink', userId });
+    throw error;
+  }
+});
+
+// @desc    Get Stripe Connect account status
+// @route   GET /api/v1/payments/connect/status
+// @access  Private
+const getConnectAccountStatus = asyncHandler(async (req, res) => {
+  const userId = req.userId;
+
+  const user = await User.findByPk(userId);
+  if (!user) {
+    return res.status(404).json({
+      success: false,
+      message: 'User not found',
+    });
+  }
+
+  if (!user.stripe_account_id) {
+    return res.status(200).json({
+      success: true,
+      data: {
+        has_account: false,
+        details_submitted: false,
+        payouts_enabled: false,
+        charges_enabled: false,
+      },
+    });
+  }
+
+  if (!stripe || user.stripe_account_id.startsWith('acct_test_')) {
+    return res.status(200).json({
+      success: true,
+      data: {
+        has_account: true,
+        account_id: user.stripe_account_id,
+        details_submitted: true,
+        payouts_enabled: true,
+        charges_enabled: true,
+        test_mode: true,
+      },
+    });
+  }
+
+  try {
+    const account = await stripe.accounts.retrieve(user.stripe_account_id);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        has_account: true,
+        account_id: account.id,
+        details_submitted: account.details_submitted,
+        payouts_enabled: account.payouts_enabled,
+        charges_enabled: account.charges_enabled,
+        requirements: account.requirements,
+        default_currency: account.default_currency,
+      },
+    });
+  } catch (error) {
+    // Account may have been deleted
+    if (error.code === 'account_invalid') {
+      await user.update({ stripe_account_id: null });
+      return res.status(200).json({
+        success: true,
+        data: {
+          has_account: false,
+          error: 'Account no longer valid. Please create a new one.',
+        },
+      });
+    }
+    throw error;
+  }
+});
+
+// @desc    Get Stripe Connect dashboard link
+// @route   GET /api/v1/payments/connect/dashboard
+// @access  Private
+const getConnectDashboardLink = asyncHandler(async (req, res) => {
+  const userId = req.userId;
+
+  const user = await User.findByPk(userId);
+  if (!user || !user.stripe_account_id) {
+    return res.status(400).json({
+      success: false,
+      message: 'No Stripe Connect account found',
+    });
+  }
+
+  if (!stripe || user.stripe_account_id.startsWith('acct_test_')) {
+    return res.status(200).json({
+      success: true,
+      message: 'Dashboard not available in test mode',
+      data: { url: null, test_mode: true },
+    });
+  }
+
+  try {
+    const loginLink = await stripe.accounts.createLoginLink(user.stripe_account_id);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        url: loginLink.url,
+      },
+    });
+  } catch (error) {
+    logger.errorWithContext(error, { action: 'getConnectDashboardLink', userId });
+    throw error;
+  }
+});
+
 module.exports = {
   createBountyPayment,
   releaseBounty,
@@ -625,4 +869,8 @@ module.exports = {
   getEarningsSummary,
   requestWithdrawal,
   handleStripeWebhook,
+  createConnectAccount,
+  getConnectOnboardingLink,
+  getConnectAccountStatus,
+  getConnectDashboardLink,
 };

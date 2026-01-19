@@ -13,10 +13,22 @@ const { Op } = require('sequelize');
 const logger = require('../config/logger');
 const businessRules = require('../config/businessRules');
 
-// Initialize Stripe
-const stripe = process.env.STRIPE_SECRET_KEY
-  ? require('stripe')(process.env.STRIPE_SECRET_KEY)
+// Initialize Stripe - only if valid key is provided
+// Valid Stripe keys are at least 32 characters and start with sk_test_ or sk_live_
+const stripeKey = process.env.STRIPE_SECRET_KEY;
+const isValidStripeKey = stripeKey &&
+  stripeKey.length >= 32 &&
+  (stripeKey.startsWith('sk_test_') || stripeKey.startsWith('sk_live_')) &&
+  !stripeKey.includes('dummy') &&
+  !stripeKey.includes('*');
+
+const stripe = isValidStripeKey
+  ? require('stripe')(stripeKey)
   : null;
+
+if (!stripe) {
+  logger.warn('Stripe not configured - escrow operations will be simulated');
+}
 
 /**
  * Create an escrow hold for a case bounty
@@ -152,11 +164,11 @@ async function releaseEscrow(transactionId, finderId, claimId = null) {
 
   // Create transfer to finder (if they have connected account)
   let transfer = null;
-  if (finder.stripe_connect_id) {
+  if (finder.stripe_account_id) {
     transfer = await stripe.transfers.create({
       amount: Math.round(transaction.net_amount * 100),
       currency: transaction.currency.toLowerCase(),
-      destination: finder.stripe_connect_id,
+      destination: finder.stripe_account_id,
       metadata: {
         transaction_id: transaction.id,
         case_id: transaction.case_id,

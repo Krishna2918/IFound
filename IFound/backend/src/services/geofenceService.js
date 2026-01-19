@@ -79,7 +79,7 @@ async function getCasesNearLocation(latitude, longitude, radiusKm = CONFIG.defau
       {
         model: User,
         as: 'poster',
-        attributes: ['id', 'full_name'],
+        attributes: ['id', 'first_name', 'last_name'],
       },
     ],
     order: [['bounty_amount', 'DESC']],

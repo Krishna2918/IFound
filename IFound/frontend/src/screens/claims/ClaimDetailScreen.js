@@ -143,7 +143,13 @@ const ClaimDetailScreen = ({ navigation, route }) => {
   };
 
   const openChat = () => {
-    navigation.navigate('Chat', { claimId: claim.id });
+    navigation.navigate('Chat', {
+      claimId: claim.id,
+      otherPartyName: claim.finder?.first_name
+        ? `${claim.finder.first_name} ${claim.finder.last_name || ''}`.trim()
+        : 'Finder',
+      itemTitle: claim.case?.title || 'Item',
+    });
   };
 
   const openDispute = () => {

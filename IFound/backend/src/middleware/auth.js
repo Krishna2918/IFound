@@ -120,9 +120,13 @@ const requireVerification = (minLevel = 'email_verified') => {
   };
 };
 
+// Require admin user type
+const requireAdmin = requireUserType('admin');
+
 module.exports = {
   authenticateToken,
   optionalAuth,
   requireUserType,
   requireVerification,
+  requireAdmin,
 };

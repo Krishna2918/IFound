@@ -317,7 +317,7 @@ const mockChats = [
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: colors.background,
   },
   centered: {
     flex: 1,
@@ -326,11 +326,11 @@ const styles = StyleSheet.create({
   },
   headerStats: {
     flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     paddingVertical: 16,
     paddingHorizontal: 32,
     borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
+    borderBottomColor: colors.border,
   },
   statItem: {
     flex: 1,
@@ -342,16 +342,16 @@ const styles = StyleSheet.create({
     color: colors.primary,
   },
   unreadStat: {
-    color: '#FF5722',
+    color: '#F97316',
   },
   statLabel: {
     fontSize: 12,
-    color: '#666',
+    color: colors.onSurfaceVariant,
     marginTop: 4,
   },
   statDivider: {
     width: 1,
-    backgroundColor: '#E0E0E0',
+    backgroundColor: colors.border,
     marginHorizontal: 16,
   },
   listContent: {
@@ -359,7 +359,7 @@ const styles = StyleSheet.create({
   },
   chatItem: {
     flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
@@ -389,17 +389,17 @@ const styles = StyleSheet.create({
   chatName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: colors.text,
     flex: 1,
     marginRight: 8,
   },
   chatTime: {
     fontSize: 12,
-    color: '#999',
+    color: colors.onSurfaceVariant,
   },
   itemTitle: {
     fontSize: 13,
-    color: '#666',
+    color: colors.onSurfaceVariant,
     marginBottom: 4,
   },
   chatFooter: {
@@ -409,12 +409,12 @@ const styles = StyleSheet.create({
   },
   lastMessage: {
     fontSize: 14,
-    color: '#999',
+    color: colors.onSurfaceVariant,
     flex: 1,
     marginRight: 8,
   },
   unreadMessage: {
-    color: '#333',
+    color: colors.text,
     fontWeight: '500',
   },
   roleChip: {
@@ -422,13 +422,13 @@ const styles = StyleSheet.create({
   },
   roleChipText: {
     fontSize: 10,
-    color: '#FFFFFF',
+    color: colors.onPrimary,
   },
   finderChip: {
-    backgroundColor: '#2196F3',
+    backgroundColor: '#1E3A8A',
   },
   claimantChip: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#065F46',
   },
   divider: {
     marginLeft: 78,
@@ -447,12 +447,12 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 20,
     fontWeight: '600',
-    color: '#333',
+    color: colors.text,
     marginBottom: 8,
   },
   emptyText: {
     fontSize: 14,
-    color: '#666',
+    color: colors.onSurfaceVariant,
     textAlign: 'center',
     lineHeight: 20,
   },

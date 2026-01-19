@@ -16,6 +16,8 @@ const AuditLog = require('./AuditLog');
 const NotificationPreference = require('./NotificationPreference');
 const DeviceToken = require('./DeviceToken');
 const Notification = require('./Notification');
+const LawEnforcementAgency = require('./LawEnforcementAgency');
+const LawEnforcementOfficer = require('./LawEnforcementOfficer');
 
 // Define Associations
 
@@ -117,6 +119,18 @@ User.hasMany(DeviceToken, { foreignKey: 'user_id', as: 'deviceTokens' });
 Notification.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 User.hasMany(Notification, { foreignKey: 'user_id', as: 'notifications' });
 
+// Law Enforcement Agency associations
+LawEnforcementAgency.hasMany(LawEnforcementOfficer, { foreignKey: 'agency_id', as: 'officers' });
+LawEnforcementAgency.hasMany(Case, { foreignKey: 'law_enforcement_agency_id', as: 'cases' });
+
+// Law Enforcement Officer associations
+LawEnforcementOfficer.belongsTo(LawEnforcementAgency, { foreignKey: 'agency_id', as: 'agency' });
+LawEnforcementOfficer.hasMany(Case, { foreignKey: 'law_enforcement_officer_id', as: 'created_cases' });
+
+// Case law enforcement associations
+Case.belongsTo(LawEnforcementAgency, { foreignKey: 'law_enforcement_agency_id', as: 'law_enforcement_agency' });
+Case.belongsTo(LawEnforcementOfficer, { foreignKey: 'law_enforcement_officer_id', as: 'law_enforcement_officer' });
+
 // Add new enum value if it doesn't exist (for PostgreSQL)
 const updateEnumType = async () => {
   try {
@@ -175,5 +189,7 @@ module.exports = {
   NotificationPreference,
   DeviceToken,
   Notification,
+  LawEnforcementAgency,
+  LawEnforcementOfficer,
   syncDatabase,
 };

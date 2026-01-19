@@ -82,6 +82,14 @@ const ProfileScreen = ({ navigation }) => {
           />
           <Divider />
           <List.Item
+            title="My Claims"
+            description="Track items you've claimed"
+            left={props => <List.Icon {...props} icon="hand-pointing-right" />}
+            right={props => <List.Icon {...props} icon="chevron-right" />}
+            onPress={() => navigation.navigate('MyClaims')}
+          />
+          <Divider />
+          <List.Item
             title="Payment History"
             description="View rewards and transactions"
             left={props => <List.Icon {...props} icon="cash" />}

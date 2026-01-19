@@ -3,6 +3,8 @@ const { asyncHandler } = require('../middleware/errorHandler');
 const faceRecognitionService = require('../services/faceRecognitionService');
 const objectDetectionService = require('../services/objectDetectionService');
 const imageSimilarityService = require('../services/imageSimilarityService');
+const rekognitionService = require('../services/rekognitionService');
+const logger = require('../config/logger');
 const path = require('path');
 
 // @desc    Search cases by uploading a photo (face search)
@@ -304,6 +306,11 @@ const getAIStatus = asyncHandler(async (req, res) => {
           status: imageSimilarityService.initialized ? 'active' : 'initializing',
           description: 'Find visually similar images',
         },
+        awsRekognition: {
+          name: 'AWS Rekognition',
+          status: rekognitionService.available ? 'active' : 'unavailable',
+          description: 'Production-grade face and object recognition',
+        },
       },
       capabilities: [
         'Face detection and recognition',
@@ -312,9 +319,286 @@ const getAIStatus = asyncHandler(async (req, res) => {
         'Image quality assessment',
         'Visual similarity matching',
         'Automatic categorization',
+        'Content moderation',
+        'Cloud-based face indexing',
       ],
     },
   });
+});
+
+// ============================================
+// AWS REKOGNITION ENDPOINTS (Production-Grade)
+// ============================================
+
+// @desc    Analyze image using AWS Rekognition
+// @route   POST /api/v1/ai/rekognition/analyze
+// @access  Private
+const rekognitionAnalyze = asyncHandler(async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({
+      success: false,
+      message: 'Image file is required',
+    });
+  }
+
+  const imageBuffer = req.file.buffer;
+
+  const [labels, moderation, category] = await Promise.all([
+    rekognitionService.detectLabels(imageBuffer),
+    rekognitionService.moderateContent(imageBuffer),
+    rekognitionService.categorizePhoto(imageBuffer),
+  ]);
+
+  if (moderation.shouldBlock) {
+    logger.warn('Inappropriate content blocked', {
+      userId: req.user?.id,
+      labels: moderation.unsafeLabels,
+    });
+
+    return res.status(400).json({
+      success: false,
+      message: 'Image contains inappropriate content',
+      moderationLabels: moderation.unsafeLabels,
+    });
+  }
+
+  res.json({
+    success: true,
+    analysis: {
+      labels: labels.labels,
+      category: category.category,
+      categoryConfidence: category.confidence,
+      suggestedTags: category.suggestedTags,
+      moderation: {
+        safe: moderation.safe,
+        warnings: moderation.moderationLabels?.filter(l => l.confidence >= 50) || [],
+      },
+    },
+  });
+});
+
+// @desc    Detect faces using AWS Rekognition
+// @route   POST /api/v1/ai/rekognition/detect-faces
+// @access  Private
+const rekognitionDetectFaces = asyncHandler(async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({
+      success: false,
+      message: 'Image file is required',
+    });
+  }
+
+  const result = await rekognitionService.detectFaces(req.file.buffer);
+
+  res.json({
+    success: result.success,
+    faces: result.faces,
+    count: result.count,
+  });
+});
+
+// @desc    Compare two faces using AWS Rekognition
+// @route   POST /api/v1/ai/rekognition/compare-faces
+// @access  Private
+const rekognitionCompareFaces = asyncHandler(async (req, res) => {
+  if (!req.files || !req.files.source || !req.files.target) {
+    return res.status(400).json({
+      success: false,
+      message: 'Both source and target images are required',
+    });
+  }
+
+  const sourceBuffer = req.files.source[0].buffer;
+  const targetBuffer = req.files.target[0].buffer;
+  const threshold = req.body.threshold ? parseFloat(req.body.threshold) : 70;
+
+  const result = await rekognitionService.compareFaces(
+    sourceBuffer,
+    targetBuffer,
+    threshold
+  );
+
+  res.json(result);
+});
+
+// @desc    Search for matching faces in indexed collection
+// @route   POST /api/v1/ai/rekognition/search-faces
+// @access  Private
+const rekognitionSearchFaces = asyncHandler(async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({
+      success: false,
+      message: 'Image file is required',
+    });
+  }
+
+  const maxFaces = req.body.maxFaces ? parseInt(req.body.maxFaces) : 10;
+  const threshold = req.body.threshold ? parseFloat(req.body.threshold) : 70;
+
+  const result = await rekognitionService.searchFaces(
+    req.file.buffer,
+    maxFaces,
+    threshold
+  );
+
+  if (result.success && result.matches.length > 0) {
+    const caseIds = [...new Set(
+      result.matches
+        .map(m => m.externalId?.split('-')[0])
+        .filter(Boolean)
+    )];
+
+    if (caseIds.length > 0) {
+      const cases = await Case.findAll({
+        where: { id: caseIds },
+        attributes: ['id', 'title', 'case_type', 'status', 'bounty_amount'],
+      });
+
+      const caseMap = new Map(cases.map(c => [c.id, c]));
+
+      result.matches = result.matches.map(match => {
+        const caseId = match.externalId?.split('-')[0];
+        return {
+          ...match,
+          case: caseId ? caseMap.get(caseId)?.toJSON() : null,
+        };
+      });
+    }
+  }
+
+  res.json(result);
+});
+
+// @desc    Index a face from a case photo
+// @route   POST /api/v1/ai/rekognition/index-face
+// @access  Private
+const rekognitionIndexFace = asyncHandler(async (req, res) => {
+  const { photoId } = req.body;
+
+  if (!photoId) {
+    return res.status(400).json({
+      success: false,
+      message: 'Photo ID is required',
+    });
+  }
+
+  const photo = await Photo.findByPk(photoId, {
+    include: [{ model: Case, as: 'case' }],
+  });
+
+  if (!photo) {
+    return res.status(404).json({
+      success: false,
+      message: 'Photo not found',
+    });
+  }
+
+  if (photo.case.poster_id !== req.user.id && req.user.role !== 'admin') {
+    return res.status(403).json({
+      success: false,
+      message: 'Not authorized to index this photo',
+    });
+  }
+
+  const imageBuffer = await rekognitionService.fetchFromS3(photo.s3_url);
+  if (!imageBuffer) {
+    return res.status(400).json({
+      success: false,
+      message: 'Could not fetch photo from storage',
+    });
+  }
+
+  const externalId = `${photo.case_id}-${photo.id}`;
+  const result = await rekognitionService.indexFace(imageBuffer, externalId);
+
+  if (result.success) {
+    await photo.update({ face_id: result.faceId });
+
+    logger.info('Face indexed via Rekognition', {
+      photoId: photo.id,
+      caseId: photo.case_id,
+      faceId: result.faceId,
+    });
+  }
+
+  res.json(result);
+});
+
+// @desc    Check for duplicate images
+// @route   POST /api/v1/ai/rekognition/check-duplicate
+// @access  Private
+const rekognitionCheckDuplicate = asyncHandler(async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({
+      success: false,
+      message: 'Image file is required',
+    });
+  }
+
+  const { caseType, category } = req.body;
+
+  const whereClause = { status: 'active' };
+  if (caseType) whereClause.case_type = caseType;
+  if (category) whereClause.item_category = category;
+
+  const recentCases = await Case.findAll({
+    where: whereClause,
+    include: [{
+      model: Photo,
+      as: 'photos',
+      limit: 1,
+      where: { is_primary: true },
+      required: false,
+    }],
+    order: [['createdAt', 'DESC']],
+    limit: 50,
+  });
+
+  const existingPhotos = recentCases
+    .map(c => c.photos?.[0])
+    .filter(Boolean)
+    .map(p => ({
+      id: p.id,
+      case_id: p.case_id,
+      s3_url: p.s3_url,
+    }));
+
+  const result = await rekognitionService.checkDuplicate(
+    req.file.buffer,
+    existingPhotos
+  );
+
+  if (result.isDuplicate && result.matches.length > 0) {
+    const caseIds = result.matches.map(m => m.caseId);
+    const cases = await Case.findAll({
+      where: { id: caseIds },
+      attributes: ['id', 'title', 'case_type', 'status', 'poster_id'],
+    });
+
+    const caseMap = new Map(cases.map(c => [c.id, c]));
+    result.matches = result.matches.map(m => ({
+      ...m,
+      case: caseMap.get(m.caseId)?.toJSON(),
+    }));
+  }
+
+  res.json(result);
+});
+
+// @desc    Moderate image content
+// @route   POST /api/v1/ai/rekognition/moderate
+// @access  Private
+const rekognitionModerate = asyncHandler(async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({
+      success: false,
+      message: 'Image file is required',
+    });
+  }
+
+  const result = await rekognitionService.moderateContent(req.file.buffer);
+
+  res.json(result);
 });
 
 module.exports = {
@@ -323,4 +607,12 @@ module.exports = {
   searchSimilar,
   analyzePhoto,
   getAIStatus,
+  // AWS Rekognition endpoints
+  rekognitionAnalyze,
+  rekognitionDetectFaces,
+  rekognitionCompareFaces,
+  rekognitionSearchFaces,
+  rekognitionIndexFace,
+  rekognitionCheckDuplicate,
+  rekognitionModerate,
 };

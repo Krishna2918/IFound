@@ -1,52 +1,51 @@
-import React, { useState } from 'react';
-import { View, StyleSheet, FlatList } from 'react-native';
-import { Card, Title, Paragraph, Chip, SegmentedButtons } from 'react-native-paper';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, StyleSheet, FlatList, RefreshControl } from 'react-native';
+import { Card, Title, Paragraph, Chip, SegmentedButtons, ActivityIndicator, Text } from 'react-native-paper';
 import { colors } from '../../config/theme';
+import { submissionAPI } from '../../services/api';
 
 const MySubmissionsScreen = ({ navigation }) => {
   const [filter, setFilter] = useState('all');
+  const [submissions, setSubmissions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(null);
 
-  const mockSubmissions = [
-    {
-      id: '1',
-      caseTitle: 'Lost iPhone 13',
-      date: '2024-11-05',
-      status: 'pending',
-      description: 'I saw a blue iPhone near the coffee shop...',
-      caseId: '1',
-    },
-    {
-      id: '2',
-      caseTitle: 'Found Cat',
-      date: '2024-11-03',
-      status: 'accepted',
-      description: 'I found the cat near Central Park...',
-      caseId: '2',
-      reward: '$50',
-    },
-    {
-      id: '3',
-      caseTitle: 'Lost Wallet',
-      date: '2024-11-01',
-      status: 'rejected',
-      description: 'I think I saw it at the mall...',
-      caseId: '3',
-    },
-  ];
+  const fetchMySubmissions = useCallback(async () => {
+    try {
+      setError(null);
+      const params = filter !== 'all' ? { status: filter } : {};
+      const response = await submissionAPI.getMySubmissions(params);
+      setSubmissions(response.data?.submissions || []);
+    } catch (err) {
+      console.error('Failed to fetch submissions:', err);
+      setError(err.message || 'Failed to load submissions');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [filter]);
 
-  const getFilteredSubmissions = () => {
-    if (filter === 'all') return mockSubmissions;
-    return mockSubmissions.filter(sub => sub.status === filter);
+  useEffect(() => {
+    fetchMySubmissions();
+  }, [fetchMySubmissions]);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchMySubmissions();
   };
 
   const getStatusColor = (status) => {
     switch (status) {
       case 'pending':
         return colors.warning;
+      case 'verified':
       case 'accepted':
         return colors.success;
       case 'rejected':
         return colors.error;
+      case 'reviewing':
+        return colors.primary;
       default:
         return colors.disabled;
     }
@@ -56,36 +55,62 @@ const MySubmissionsScreen = ({ navigation }) => {
     return status.charAt(0).toUpperCase() + status.slice(1);
   };
 
+  const formatDate = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toLocaleDateString();
+  };
+
   const renderSubmission = ({ item }) => (
     <Card
       style={styles.card}
-      onPress={() => navigation.navigate('CaseDetail', { caseId: item.caseId })}
+      onPress={() => navigation.navigate('CaseDetail', { caseId: item.case_id })}
     >
       <Card.Content>
         <View style={styles.header}>
-          <Title style={styles.title} numberOfLines={1}>{item.caseTitle}</Title>
+          <Title style={styles.title} numberOfLines={1}>
+            {item.case?.title || 'Case Submission'}
+          </Title>
           <Chip
             mode="outlined"
-            textStyle={{ color: getStatusColor(item.status) }}
-            style={{ borderColor: getStatusColor(item.status) }}
+            textStyle={{ color: getStatusColor(item.verification_status || item.status) }}
+            style={{ borderColor: getStatusColor(item.verification_status || item.status) }}
           >
-            {getStatusLabel(item.status)}
+            {getStatusLabel(item.verification_status || item.status || 'pending')}
           </Chip>
         </View>
 
         <Paragraph style={styles.description} numberOfLines={2}>
-          {item.description}
+          {item.content || item.description || 'No description provided'}
         </Paragraph>
 
         <View style={styles.footer}>
-          <Paragraph style={styles.date}>📅 {item.date}</Paragraph>
-          {item.reward && (
-            <Paragraph style={styles.reward}>💰 Reward: {item.reward}</Paragraph>
+          <Paragraph style={styles.date}>{formatDate(item.createdAt)}</Paragraph>
+          {item.reward_earned && (
+            <Paragraph style={styles.reward}>Reward: ${item.reward_earned}</Paragraph>
           )}
         </View>
       </Card.Content>
     </Card>
   );
+
+  if (loading && !refreshing) {
+    return (
+      <View style={styles.centerContainer}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={styles.loadingText}>Loading your submissions...</Text>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.centerContainer}>
+        <Text style={styles.errorText}>{error}</Text>
+        <Chip icon="refresh" onPress={fetchMySubmissions}>Retry</Chip>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -96,20 +121,26 @@ const MySubmissionsScreen = ({ navigation }) => {
           buttons={[
             { value: 'all', label: 'All' },
             { value: 'pending', label: 'Pending' },
-            { value: 'accepted', label: 'Accepted' },
+            { value: 'verified', label: 'Verified' },
             { value: 'rejected', label: 'Rejected' },
           ]}
         />
       </View>
 
       <FlatList
-        data={getFilteredSubmissions()}
+        data={submissions}
         renderItem={renderSubmission}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Paragraph>No submissions found</Paragraph>
+            <Paragraph style={styles.emptySubtext}>
+              Submit tips on cases to earn rewards
+            </Paragraph>
           </View>
         }
       />
@@ -121,6 +152,21 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  centerContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+  },
+  loadingText: {
+    marginTop: 16,
+    color: colors.placeholder,
+  },
+  errorText: {
+    marginBottom: 16,
+    color: colors.error,
+    textAlign: 'center',
   },
   filterContainer: {
     padding: 16,
@@ -168,6 +214,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 32,
+  },
+  emptySubtext: {
+    color: colors.placeholder,
+    marginTop: 4,
   },
 });
 

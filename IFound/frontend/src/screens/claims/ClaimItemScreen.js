@@ -406,7 +406,7 @@ const ClaimItemScreen = ({ navigation, route }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: colors.background,
   },
   scrollView: {
     flex: 1,
@@ -419,7 +419,7 @@ const styles = StyleSheet.create({
   },
   caseCard: {
     marginBottom: 16,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
   },
   caseHeader: {
     flexDirection: 'row',
@@ -455,7 +455,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#E0E0E0',
+    backgroundColor: colors.surfaceVariant,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -463,16 +463,16 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
   },
   stepNumber: {
-    color: '#757575',
+    color: colors.onSurfaceVariant,
     fontWeight: 'bold',
   },
   stepNumberActive: {
-    color: '#FFFFFF',
+    color: colors.onPrimary,
   },
   stepLine: {
     width: 40,
     height: 3,
-    backgroundColor: '#E0E0E0',
+    backgroundColor: colors.surfaceVariant,
     marginHorizontal: 4,
   },
   stepLineActive: {
@@ -486,24 +486,25 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   stepDescription: {
-    color: '#666',
+    color: colors.onSurfaceVariant,
     marginBottom: 16,
   },
   input: {
     marginBottom: 8,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
   },
   tipCard: {
-    backgroundColor: '#FFF3CD',
+    backgroundColor: '#78350F',
     marginTop: 12,
   },
   tipTitle: {
     fontWeight: 'bold',
     marginBottom: 8,
+    color: '#FCD34D',
   },
   tipText: {
     fontSize: 14,
-    color: '#666',
+    color: '#FDE68A',
     marginBottom: 4,
   },
   photoGrid: {
@@ -546,23 +547,23 @@ const styles = StyleSheet.create({
     margin: 4,
     borderRadius: 8,
     borderWidth: 2,
-    borderColor: '#E0E0E0',
+    borderColor: colors.border,
     borderStyle: 'dashed',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#FAFAFA',
+    backgroundColor: colors.surfaceVariant,
   },
   addPhotoIcon: {
     fontSize: 24,
-    color: '#757575',
+    color: colors.onSurfaceVariant,
   },
   addPhotoText: {
-    color: '#757575',
+    color: colors.onSurfaceVariant,
     fontSize: 12,
     marginTop: 4,
   },
   photoHint: {
-    color: '#757575',
+    color: colors.onSurfaceVariant,
     textAlign: 'center',
   },
   divider: {

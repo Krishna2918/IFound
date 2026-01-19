@@ -2,12 +2,9 @@ import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import { useAuth } from '../context/AuthContext';
-
-// Auth screens
+// Auth screens (kept for navigation)
 import LoginScreen from '../screens/auth/LoginScreen';
 import RegisterScreen from '../screens/auth/RegisterScreen';
-import OnboardingScreen from '../screens/auth/OnboardingScreen';
 
 // Main screens
 import HomeScreen from '../screens/home/HomeScreen';
@@ -26,6 +23,8 @@ import PaymentHistoryScreen from '../screens/payment/PaymentHistoryScreen';
 import ClaimItemScreen from '../screens/claims/ClaimItemScreen';
 import MyClaimsScreen from '../screens/claims/MyClaimsScreen';
 import ClaimDetailScreen from '../screens/claims/ClaimDetailScreen';
+import VerificationQAScreen from '../screens/claims/VerificationQAScreen';
+import ReviewClaimsScreen from '../screens/claims/ReviewClaimsScreen';
 
 // Chat screens
 import ChatScreen from '../screens/chat/ChatScreen';
@@ -90,41 +89,32 @@ const MainTabNavigator = () => {
 };
 
 const AppNavigator = () => {
-  const { isAuthenticated, loading } = useAuth();
-
-  if (loading) {
-    return null; // Or loading screen
-  }
-
+  // Skip auth for now - go directly to main app
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
-      {!isAuthenticated ? (
-        // Auth Stack
-        <>
-          <Stack.Screen name="Onboarding" component={OnboardingScreen} />
-          <Stack.Screen name="Login" component={LoginScreen} />
-          <Stack.Screen name="Register" component={RegisterScreen} />
-        </>
-      ) : (
-        // Main App Stack
-        <>
-          <Stack.Screen name="MainTabs" component={MainTabNavigator} />
-          <Stack.Screen name="CaseDetail" component={CaseDetailScreen} />
-          <Stack.Screen name="CreateCase" component={CreateCaseScreen} />
-          <Stack.Screen name="ReportFound" component={ReportFoundScreen} />
-          <Stack.Screen name="SubmitTip" component={SubmitTipScreen} />
-          <Stack.Screen name="MyCases" component={MyCasesScreen} />
-          <Stack.Screen name="MySubmissions" component={MySubmissionsScreen} />
-          <Stack.Screen name="PaymentHistory" component={PaymentHistoryScreen} />
-          {/* Claim screens */}
-          <Stack.Screen name="ClaimItem" component={ClaimItemScreen} />
-          <Stack.Screen name="MyClaims" component={MyClaimsScreen} />
-          <Stack.Screen name="ClaimDetail" component={ClaimDetailScreen} />
-          {/* Chat screens */}
-          <Stack.Screen name="Chat" component={ChatScreen} />
-          <Stack.Screen name="ChatList" component={ChatListScreen} />
-        </>
-      )}
+      {/* Main App Stack */}
+      <Stack.Screen name="MainTabs" component={MainTabNavigator} />
+      <Stack.Screen name="CaseDetail" component={CaseDetailScreen} />
+      <Stack.Screen name="CreateCase" component={CreateCaseScreen} />
+      <Stack.Screen name="ReportFound" component={ReportFoundScreen} />
+      <Stack.Screen name="SubmitTip" component={SubmitTipScreen} />
+      <Stack.Screen name="MyCases" component={MyCasesScreen} />
+      <Stack.Screen name="MySubmissions" component={MySubmissionsScreen} />
+      <Stack.Screen name="PaymentHistory" component={PaymentHistoryScreen} />
+      {/* Claim screens */}
+      <Stack.Screen name="ClaimItem" component={ClaimItemScreen} />
+      <Stack.Screen name="MyClaims" component={MyClaimsScreen} />
+      <Stack.Screen name="ClaimDetail" component={ClaimDetailScreen} />
+      <Stack.Screen name="VerificationQA" component={VerificationQAScreen} />
+      <Stack.Screen name="ReviewClaims" component={ReviewClaimsScreen} />
+      {/* Chat screens */}
+      <Stack.Screen name="Chat" component={ChatScreen} />
+      <Stack.Screen name="ChatList" component={ChatListScreen} />
+      {/* Map screen */}
+      <Stack.Screen name="MapView" component={MapViewScreen} />
+      {/* Auth screens (can navigate to later) */}
+      <Stack.Screen name="Login" component={LoginScreen} />
+      <Stack.Screen name="Register" component={RegisterScreen} />
     </Stack.Navigator>
   );
 };

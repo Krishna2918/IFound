@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
-import { View, StyleSheet, ScrollView, Alert, Text } from 'react-native';
-import { TextInput, Button, Chip, Title, HelperText, Surface } from 'react-native-paper';
+import React, { useState, useEffect } from 'react';
+import { View, StyleSheet, ScrollView, Alert, Text, TouchableOpacity } from 'react-native';
+import { TextInput, Button, Chip, Title, HelperText, Surface, ActivityIndicator } from 'react-native-paper';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { colors } from '../../config/theme';
-import { PLATFORM_FEE_PERCENT } from '../../config/constants';
+import { PLATFORM_FEE_PERCENT, CASE_TYPES, ITEM_CATEGORIES } from '../../config/constants';
+import { caseAPI, searchAPI } from '../../services/api';
 
 const CreateCaseScreen = ({ navigation }) => {
   const [step, setStep] = useState(1);
@@ -12,7 +13,12 @@ const CreateCaseScreen = ({ navigation }) => {
   const [category, setCategory] = useState('');
   const [location, setLocation] = useState('');
   const [reward, setReward] = useState('');
-  const [dateLost, setDateLost] = useState('');
+  const [caseType, setCaseType] = useState(CASE_TYPES.LOST_ITEM);
+  const [loading, setLoading] = useState(false);
+
+  // Smart pricing state
+  const [pricingSuggestion, setPricingSuggestion] = useState(null);
+  const [loadingPricing, setLoadingPricing] = useState(false);
 
   const categories = [
     'Electronics',
@@ -23,6 +29,47 @@ const CreateCaseScreen = ({ navigation }) => {
     'Keys',
     'Other',
   ];
+
+  // Fetch smart pricing when category changes
+  useEffect(() => {
+    if (category && step === 3) {
+      fetchPricingSuggestion();
+    }
+  }, [category, step]);
+
+  const fetchPricingSuggestion = async () => {
+    // Map category names to backend category values
+    const categoryMap = {
+      'Electronics': 'electronics',
+      'Pets': 'pet',
+      'Personal Items': 'other',
+      'Documents': 'documents',
+      'Jewelry': 'jewelry',
+      'Keys': 'keys',
+      'Other': 'other',
+    };
+
+    setLoadingPricing(true);
+    try {
+      const response = await searchAPI.getPricingSuggestion({
+        category: categoryMap[category] || 'other',
+        description: description,
+        isUrgent: false,
+      });
+
+      if (response.success) {
+        setPricingSuggestion(response.pricing);
+      }
+    } catch (error) {
+      console.log('Pricing suggestion error:', error);
+    } finally {
+      setLoadingPricing(false);
+    }
+  };
+
+  const applyPricingTier = (amount) => {
+    setReward(String(amount));
+  };
 
   const validateStep1 = () => {
     if (!title || !description) {
@@ -54,17 +101,58 @@ const CreateCaseScreen = ({ navigation }) => {
     }
   };
 
-  const handleSubmit = () => {
-    Alert.alert(
-      'Success',
-      'Case created successfully!',
-      [
-        {
-          text: 'OK',
-          onPress: () => navigation.goBack(),
-        },
-      ]
-    );
+  const handleSubmit = async () => {
+    setLoading(true);
+
+    try {
+      // Map category names to backend item_category values
+      const categoryMap = {
+        'Electronics': ITEM_CATEGORIES.ELECTRONICS,
+        'Pets': ITEM_CATEGORIES.PET,
+        'Personal Items': ITEM_CATEGORIES.OTHER,
+        'Documents': ITEM_CATEGORIES.DOCUMENTS,
+        'Jewelry': ITEM_CATEGORIES.JEWELRY,
+        'Keys': ITEM_CATEGORIES.OTHER,
+        'Other': ITEM_CATEGORIES.OTHER,
+      };
+
+      const caseData = {
+        title,
+        description,
+        case_type: caseType,
+        item_category: categoryMap[category] || ITEM_CATEGORIES.OTHER,
+        location_description: location,
+        bounty_amount: parseFloat(reward) || 0,
+        // Default coordinates (can be enhanced with location picker)
+        latitude: 0,
+        longitude: 0,
+      };
+
+      const response = await caseAPI.createCase(caseData);
+
+      Alert.alert(
+        'Success',
+        'Case created successfully!',
+        [
+          {
+            text: 'View Case',
+            onPress: () => navigation.replace('CaseDetail', { caseId: response.data?.case?.id }),
+          },
+          {
+            text: 'Go Home',
+            onPress: () => navigation.navigate('Home'),
+          },
+        ]
+      );
+    } catch (error) {
+      console.error('Failed to create case:', error);
+      Alert.alert(
+        'Error',
+        error.message || 'Failed to create case. Please try again.'
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -151,6 +239,51 @@ const CreateCaseScreen = ({ navigation }) => {
         {step === 3 && (
           <>
             <Title style={styles.stepTitle}>Step 3: Set Your Reward</Title>
+
+            {/* Smart Pricing Suggestions */}
+            {loadingPricing ? (
+              <Surface style={styles.pricingCard}>
+                <ActivityIndicator size="small" color={colors.primary} />
+                <Text style={styles.pricingLoadingText}>Getting smart pricing suggestions...</Text>
+              </Surface>
+            ) : pricingSuggestion ? (
+              <Surface style={styles.pricingCard}>
+                <View style={styles.pricingHeader}>
+                  <Icon name="lightbulb-on" size={20} color="#F59E0B" />
+                  <Text style={styles.pricingTitle}>Suggested Bounty</Text>
+                </View>
+                <Text style={styles.pricingSuggested}>${pricingSuggestion.suggested}</Text>
+                <Text style={styles.pricingRange}>
+                  Range: ${pricingSuggestion.minimum} - ${pricingSuggestion.maximum}
+                </Text>
+
+                <View style={styles.pricingTiers}>
+                  {pricingSuggestion.tiers && Object.entries(pricingSuggestion.tiers).map(([tier, amount]) => (
+                    <TouchableOpacity
+                      key={tier}
+                      style={[
+                        styles.tierButton,
+                        reward === String(amount) && styles.tierButtonActive
+                      ]}
+                      onPress={() => applyPricingTier(amount)}
+                    >
+                      <Text style={[
+                        styles.tierLabel,
+                        reward === String(amount) && styles.tierLabelActive
+                      ]}>
+                        {tier.charAt(0).toUpperCase() + tier.slice(1)}
+                      </Text>
+                      <Text style={[
+                        styles.tierAmount,
+                        reward === String(amount) && styles.tierAmountActive
+                      ]}>
+                        ${amount}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </Surface>
+            ) : null}
 
             <View style={styles.rewardSection}>
               <Text style={styles.rewardLabel}>Bounty Amount</Text>
@@ -241,11 +374,16 @@ const CreateCaseScreen = ({ navigation }) => {
               mode="contained"
               onPress={handleSubmit}
               style={styles.submitButton}
-              icon="check-circle"
+              icon={loading ? undefined : "check-circle"}
+              disabled={loading}
             >
-              {reward && parseFloat(reward) > 0
-                ? `Post Case - Pay $${parseFloat(reward).toLocaleString()}`
-                : 'Post Case'}
+              {loading ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : reward && parseFloat(reward) > 0 ? (
+                `Post Case - Pay $${parseFloat(reward).toLocaleString()}`
+              ) : (
+                'Post Case'
+              )}
             </Button>
           )}
         </View>
@@ -290,7 +428,7 @@ const styles = StyleSheet.create({
   headerCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#EFF6FF',
+    backgroundColor: '#1E3A5F',
     borderRadius: 12,
     padding: 12,
     marginBottom: 16,
@@ -299,7 +437,7 @@ const styles = StyleSheet.create({
   headerText: {
     flex: 1,
     fontSize: 14,
-    color: '#1E40AF',
+    color: '#93C5FD',
   },
   sectionTitle: {
     fontSize: 16,
@@ -318,6 +456,75 @@ const styles = StyleSheet.create({
     marginRight: 8,
     marginBottom: 8,
   },
+  pricingCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    elevation: 2,
+    alignItems: 'center',
+  },
+  pricingLoadingText: {
+    marginTop: 8,
+    fontSize: 13,
+    color: colors.onSurfaceVariant,
+  },
+  pricingHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  pricingTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  pricingSuggested: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#10B981',
+    marginBottom: 4,
+  },
+  pricingRange: {
+    fontSize: 12,
+    color: colors.onSurfaceVariant,
+    marginBottom: 12,
+  },
+  pricingTiers: {
+    flexDirection: 'row',
+    gap: 8,
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+  },
+  tierButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    backgroundColor: colors.surfaceVariant,
+    alignItems: 'center',
+    minWidth: 70,
+  },
+  tierButtonActive: {
+    backgroundColor: colors.primary,
+  },
+  tierLabel: {
+    fontSize: 10,
+    color: colors.onSurfaceVariant,
+    textTransform: 'uppercase',
+  },
+  tierLabelActive: {
+    color: colors.onPrimary,
+  },
+  tierAmount: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: colors.text,
+    marginTop: 2,
+  },
+  tierAmountActive: {
+    color: colors.onPrimary,
+  },
   rewardSection: {
     marginBottom: 16,
   },
@@ -331,7 +538,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   feeBreakdown: {
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
@@ -351,7 +558,7 @@ const styles = StyleSheet.create({
   },
   feeLabel: {
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.onSurfaceVariant,
   },
   feeValue: {
     fontSize: 14,
@@ -369,13 +576,13 @@ const styles = StyleSheet.create({
   },
   feeDivider: {
     height: 1,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: colors.border,
     marginVertical: 8,
   },
   feeNote: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.surfaceVariant,
     borderRadius: 8,
     padding: 10,
     marginTop: 8,
@@ -384,7 +591,7 @@ const styles = StyleSheet.create({
   feeNoteText: {
     flex: 1,
     fontSize: 12,
-    color: '#6B7280',
+    color: colors.onSurfaceVariant,
     lineHeight: 16,
   },
   photoButton: {

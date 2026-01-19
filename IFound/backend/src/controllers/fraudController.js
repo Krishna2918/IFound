@@ -38,10 +38,10 @@ async function getFraudAlerts(req, res) {
     const { rows: alerts, count: total } = await FraudAlert.findAndCountAll({
       where,
       include: [
-        { model: User, as: 'user', attributes: ['id', 'email', 'full_name', 'account_status'] },
+        { model: User, as: 'user', attributes: ['id', 'email', 'first_name', 'last_name', 'account_status'] },
         { model: Case, as: 'case', attributes: ['id', 'title', 'case_type', 'status'] },
         { model: Claim, as: 'claim', attributes: ['id', 'status'] },
-        { model: User, as: 'reviewer', attributes: ['id', 'email', 'full_name'] },
+        { model: User, as: 'reviewer', attributes: ['id', 'email', 'first_name', 'last_name'] },
       ],
       order: [[sort_by, sort_order]],
       limit: parseInt(limit),
@@ -78,11 +78,11 @@ async function getFraudAlert(req, res) {
 
     const alert = await FraudAlert.findByPk(id, {
       include: [
-        { model: User, as: 'user', attributes: ['id', 'email', 'full_name', 'phone', 'account_status', 'reputation_score', 'createdAt'] },
+        { model: User, as: 'user', attributes: ['id', 'email', 'first_name', 'last_name', 'phone_number', 'account_status', 'reputation_score', 'createdAt'] },
         { model: Case, as: 'case', attributes: ['id', 'title', 'case_type', 'status', 'bounty_amount'] },
         { model: Claim, as: 'claim' },
         { model: Transaction, as: 'transaction' },
-        { model: User, as: 'reviewer', attributes: ['id', 'email', 'full_name'] },
+        { model: User, as: 'reviewer', attributes: ['id', 'email', 'first_name', 'last_name'] },
       ],
     });
 

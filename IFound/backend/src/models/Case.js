@@ -34,7 +34,7 @@ const Case = sequelize.define('Case', {
   },
   status: {
     // Lifecycle: active -> claimed -> in_progress -> completed -> archived
-    type: DataTypes.ENUM('active', 'claimed', 'in_progress', 'completed', 'archived', 'resolved', 'expired', 'suspended'),
+    type: DataTypes.ENUM('active', 'claimed', 'in_progress', 'completed', 'archived', 'resolved', 'expired', 'suspended', 'disputed'),
     allowNull: false,
     defaultValue: 'active',
   },
@@ -54,6 +54,12 @@ const Case = sequelize.define('Case', {
     type: DataTypes.DECIMAL(10, 2),
     allowNull: false,
     defaultValue: 0.00,
+  },
+  // Bounty payment status
+  bounty_status: {
+    type: DataTypes.ENUM('pending', 'held', 'paid', 'refunded', 'disputed'),
+    allowNull: false,
+    defaultValue: 'pending',
   },
   // Subject Information
   subject_name: {
@@ -191,6 +197,73 @@ const Case = sequelize.define('Case', {
       model: 'users',
       key: 'id',
     },
+  },
+  // Law Enforcement Fields
+  law_enforcement_agency_id: {
+    type: DataTypes.UUID,
+    allowNull: true,
+    references: {
+      model: 'law_enforcement_agencies',
+      key: 'id',
+    },
+    comment: 'Agency that created this case (if LE-sourced)',
+  },
+  law_enforcement_officer_id: {
+    type: DataTypes.UUID,
+    allowNull: true,
+    references: {
+      model: 'law_enforcement_officers',
+      key: 'id',
+    },
+    comment: 'Officer who created this case',
+  },
+  external_case_id: {
+    type: DataTypes.STRING(100),
+    allowNull: true,
+    comment: 'Case ID from external law enforcement database',
+  },
+  is_law_enforcement_case: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
+    comment: 'True if case was created by law enforcement',
+  },
+  is_priority_flagged: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
+    comment: 'Flagged as priority by law enforcement',
+  },
+  priority_flagged_by: {
+    type: DataTypes.UUID,
+    allowNull: true,
+    comment: 'Officer who flagged this as priority',
+  },
+  priority_flagged_at: {
+    type: DataTypes.DATE,
+    allowNull: true,
+  },
+  priority_flag_reason: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+  },
+  amber_alert: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
+    comment: 'Active AMBER alert for this case',
+  },
+  silver_alert: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
+    comment: 'Active Silver alert (missing elderly)',
+  },
+  ncic_number: {
+    type: DataTypes.STRING(50),
+    allowNull: true,
+    comment: 'NCIC (National Crime Information Center) number',
+  },
+  namus_id: {
+    type: DataTypes.STRING(50),
+    allowNull: true,
+    comment: 'NamUs (National Missing and Unidentified Persons System) ID',
   },
 }, {
   tableName: 'cases',

@@ -183,6 +183,7 @@ const FraudAlert = sequelize.define('FraudAlert', {
 
 }, {
   tableName: 'fraud_alerts',
+  underscored: true,
   indexes: [
     { fields: ['user_id'] },
     { fields: ['case_id'] },
@@ -191,7 +192,7 @@ const FraudAlert = sequelize.define('FraudAlert', {
     { fields: ['severity'] },
     { fields: ['status'] },
     { fields: ['fraud_score'] },
-    { fields: ['createdAt'] },
+    { fields: ['created_at'] },
     { fields: ['status', 'severity'] }, // For admin queue
   ],
 });

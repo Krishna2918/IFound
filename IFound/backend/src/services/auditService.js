@@ -588,7 +588,7 @@ async function getEntityAuditLogs(entityType, entityId, options = {}) {
     limit,
     offset,
     include: [
-      { model: User, as: 'user', attributes: ['id', 'email', 'full_name'] },
+      { model: User, as: 'user', attributes: ['id', 'email', 'first_name', 'last_name'] },
     ],
   });
 }
@@ -613,7 +613,7 @@ async function getHighRiskEvents(options = {}) {
     limit,
     offset,
     include: [
-      { model: User, as: 'user', attributes: ['id', 'email', 'full_name'] },
+      { model: User, as: 'user', attributes: ['id', 'email', 'first_name', 'last_name'] },
     ],
   });
 }

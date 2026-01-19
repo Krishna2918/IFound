@@ -3,6 +3,7 @@ import { View, StyleSheet, ScrollView, Image, Dimensions, ActivityIndicator, Tou
 import { Button, Card, Title, Paragraph, Chip, Divider, Text, Surface } from 'react-native-paper';
 import { colors } from '../../config/theme';
 import { caseAPI, visualDnaAPI } from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
 
 const { width } = Dimensions.get('window');
 
@@ -37,6 +38,7 @@ const ENTITY_ICONS = {
 };
 
 const CaseDetailScreen = ({ navigation, route }) => {
+  const { user } = useAuth();
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [caseData, setCaseData] = useState(null);
   const [visualDNA, setVisualDNA] = useState(null);
@@ -44,6 +46,10 @@ const CaseDetailScreen = ({ navigation, route }) => {
   const [error, setError] = useState(null);
 
   const { caseId } = route.params || {};
+
+  // Check if current user is the owner of this case
+  const isOwner = user?.id && caseData?.poster_id === user.id;
+  const isFoundItem = caseData?.case_type === 'found_item';
 
   useEffect(() => {
     if (caseId) {
@@ -304,14 +310,72 @@ const CaseDetailScreen = ({ navigation, route }) => {
       </Card>
 
       <View style={styles.buttonContainer}>
-        <Button
-          mode="contained"
-          onPress={handleSubmitTip}
-          style={styles.submitButton}
-          icon="send"
-        >
-          Submit a Tip
-        </Button>
+        {/* Claim button for found items (non-owners only) */}
+        {isFoundItem && !isOwner && (
+          <Button
+            mode="contained"
+            onPress={() => {
+              // Normalize case data for ClaimItemScreen
+              const normalizedCaseData = {
+                id: displayCase.id,
+                title: displayCase.title,
+                category: displayCase.category || displayCase.case_type,
+                description: displayCase.description,
+                photos: displayCase.Photos?.map(p => ({ url: p.image_url })) ||
+                        displayCase.images?.map(url => ({ url })) ||
+                        [],
+              };
+              navigation.navigate('ClaimItem', {
+                caseId: displayCase.id,
+                caseData: normalizedCaseData
+              });
+            }}
+            style={styles.claimButton}
+            icon="hand-pointing-right"
+          >
+            Claim This Item
+          </Button>
+        )}
+
+        {/* Review Claims button for case owners */}
+        {isOwner && (
+          <Button
+            mode="contained"
+            onPress={() => {
+              // Normalize case data for ReviewClaimsScreen
+              const normalizedCaseData = {
+                id: displayCase.id,
+                title: displayCase.title,
+                category: displayCase.category || displayCase.case_type,
+                description: displayCase.description,
+                photos: displayCase.Photos?.map(p => ({ url: p.image_url })) ||
+                        displayCase.images?.map(url => ({ url })) ||
+                        [],
+              };
+              navigation.navigate('ReviewClaims', {
+                caseId: displayCase.id,
+                caseData: normalizedCaseData
+              });
+            }}
+            style={styles.reviewClaimsButton}
+            icon="clipboard-check"
+          >
+            Review Claims
+          </Button>
+        )}
+
+        {/* Submit Tip button (for lost items or non-owners) */}
+        {!isFoundItem && !isOwner && (
+          <Button
+            mode="contained"
+            onPress={handleSubmitTip}
+            style={styles.submitButton}
+            icon="send"
+          >
+            Submit a Tip
+          </Button>
+        )}
+
         <Button
           mode="outlined"
           onPress={() => navigation.navigate('MapView', { caseId: displayCase.id })}
@@ -372,7 +436,7 @@ const styles = StyleSheet.create({
     margin: 16,
     marginBottom: 8,
     elevation: 3,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.surface,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: colors.primary + '30',
@@ -431,7 +495,7 @@ const styles = StyleSheet.create({
   colorChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.surfaceVariant,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
@@ -442,29 +506,29 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     marginRight: 4,
     borderWidth: 1,
-    borderColor: '#D1D5DB',
+    borderColor: colors.border,
   },
   colorText: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#374151',
+    color: colors.text,
   },
   qualityChip: {
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.surfaceVariant,
   },
   qualityHigh: {
-    backgroundColor: '#D1FAE5',
+    backgroundColor: '#065F46',
   },
   qualityMedium: {
-    backgroundColor: '#FEF3C7',
+    backgroundColor: '#78350F',
   },
   qualityLow: {
-    backgroundColor: '#FEE2E2',
+    backgroundColor: '#7F1D1D',
   },
   hashRow: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.surfaceVariant,
     borderRadius: 8,
     padding: 12,
     marginBottom: 8,
@@ -480,7 +544,7 @@ const styles = StyleSheet.create({
   hashValue: {
     fontFamily: 'monospace',
     fontSize: 12,
-    color: '#1F2937',
+    color: colors.text,
     fontWeight: '600',
   },
   confidenceText: {
@@ -544,6 +608,14 @@ const styles = StyleSheet.create({
   submitButton: {
     marginBottom: 12,
     backgroundColor: colors.primary,
+  },
+  claimButton: {
+    marginBottom: 12,
+    backgroundColor: colors.success,
+  },
+  reviewClaimsButton: {
+    marginBottom: 12,
+    backgroundColor: colors.secondary || '#6366F1',
   },
   mapButton: {
     borderColor: colors.primary,
